@@ -24,11 +24,15 @@ pub enum DataKeyV2 {
     // -- Dust threshold ------------------------------------------
     /// Per-asset minimum stream amount. Falls back to DEFAULT_MIN_VALUE.
     MinValue(Address),
+    // -- Analytics -----------------------------------------------
+    UserSeen(Address),
 }
 
 /// Global stream counter — stored under a short Symbol to match
 /// the V1 pattern and stay cheap on storage.
 pub const STREAM_COUNT_V2: Symbol = symbol_short!("STR_V2");
+pub const V2_TVL: Symbol = symbol_short!("V2_TVL");
+pub const V2_USER_COUNT: Symbol = symbol_short!("V2_USER");
 
 // TTL constants (~5-second ledger close time)
 const INSTANCE_TTL_THRESHOLD: u32 = 518_400; // ~30 days
@@ -81,6 +85,42 @@ pub fn set_stream(env: &Env, stream_id: u64, stream: &StreamV2) {
 pub fn get_stream(env: &Env, stream_id: u64) -> Option<StreamV2> {
     bump_instance(env);
     env.storage().instance().get(&DataKeyV2::Stream(stream_id))
+}
+
+// ----------------------------------------------------------------
+// instance() helpers — Analytics
+// ----------------------------------------------------------------
+
+/// Update TVL and unique user count.
+pub fn update_stats(env: &Env, amount: i128, sender: &Address, receiver: &Address) {
+    // Update TVL
+    let tvl: i128 = env.storage().instance().get(&V2_TVL).unwrap_or(0);
+    env.storage().instance().set(&V2_TVL, &(tvl + amount));
+
+    // Update User Count
+    let mut user_count: u32 = env.storage().instance().get(&V2_USER_COUNT).unwrap_or(0);
+
+    if !env.storage().persistent().has(&DataKeyV2::UserSeen(sender.clone())) {
+        env.storage().persistent().set(&DataKeyV2::UserSeen(sender.clone()), &true);
+        user_count += 1;
+    }
+
+    if !env.storage().persistent().has(&DataKeyV2::UserSeen(receiver.clone())) {
+        env.storage().persistent().set(&DataKeyV2::UserSeen(receiver.clone()), &true);
+        user_count += 1;
+    }
+
+    env.storage().instance().set(&V2_USER_COUNT, &user_count);
+    bump_instance(env);
+}
+
+/// Retrieve all V2 summary metrics.
+pub fn get_health(env: &Env) -> crate::types::ProtocolHealthV2 {
+    crate::types::ProtocolHealthV2 {
+        total_v2_tvl: env.storage().instance().get(&V2_TVL).unwrap_or(0),
+        active_v2_users: env.storage().instance().get(&V2_USER_COUNT).unwrap_or(0),
+        total_v2_streams: env.storage().instance().get(&STREAM_COUNT_V2).unwrap_or(0),
+    }
 }
 
 // ----------------------------------------------------------------

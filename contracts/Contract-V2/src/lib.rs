@@ -118,6 +118,7 @@ impl Contract {
         };
 
         storage::set_stream(&env, v2_stream_id, &v2_stream);
+        storage::update_stats(&env, remaining, &v1_stream.sender, &caller);
 
         env.events().publish(
             (symbol_short!("migrated"), caller.clone()),
@@ -137,6 +138,10 @@ impl Contract {
         storage::get_stream(&env, stream_id)
     }
 
+    pub fn get_v2_protocol_health(env: Env) -> types::ProtocolHealthV2 {
+        storage::get_health(&env)
+    }
+    
     // ----------------------------------------------------------------
     // Issue #360 — Permit Streaming
     // ----------------------------------------------------------------
@@ -226,6 +231,7 @@ impl Contract {
         };
 
         storage::set_stream(&env, stream_id, &stream);
+        storage::update_stats(&env, total_amount, &sender_addr, &receiver);
 
         // ── Emit event ────────────────────────────────────────────────
         env.events().publish(
