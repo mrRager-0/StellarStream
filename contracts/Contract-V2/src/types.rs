@@ -1,7 +1,5 @@
 use soroban_sdk::{contracttype, Address, BytesN};
 
-
-
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct StreamV2 {

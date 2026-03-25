@@ -10,11 +10,11 @@ mod v1_interface;
 
 use errors::ContractError;
 pub use types::{
-    ContractPausedEvent, ContractUnpausedEvent, PermitStreamCreatedEvent, StreamCancelledV2Event,
-    StreamClaimV2Event, StreamCreatedV2Event, StreamMigratedEvent, StreamV2, StreamArgs, PermitArgs
+    ContractPausedEvent, ContractUnpausedEvent, PermitArgs, PermitStreamCreatedEvent, StreamArgs,
+    StreamCancelledV2Event, StreamClaimV2Event, StreamCreatedV2Event, StreamMigratedEvent,
+    StreamV2,
 };
 use v1_interface::Client as V1Client;
-
 
 #[contract]
 pub struct Contract;
@@ -194,7 +194,8 @@ impl Contract {
         Self::require_not_paused(&env)?;
         receiver.require_auth();
 
-        let mut stream = storage::get_stream(&env, stream_id).ok_or(ContractError::StreamNotFound)?;
+        let mut stream =
+            storage::get_stream(&env, stream_id).ok_or(ContractError::StreamNotFound)?;
 
         if stream.receiver != receiver {
             return Err(ContractError::NotStreamOwner);
@@ -245,7 +246,8 @@ impl Contract {
         Self::require_not_paused(&env)?;
         caller.require_auth();
 
-        let mut stream = storage::get_stream(&env, stream_id).ok_or(ContractError::StreamNotFound)?;
+        let mut stream =
+            storage::get_stream(&env, stream_id).ok_or(ContractError::StreamNotFound)?;
 
         if stream.sender != caller && stream.receiver != caller {
             return Err(ContractError::NotStreamOwner);
@@ -273,11 +275,7 @@ impl Contract {
             );
         }
         if to_sender > 0 {
-            token_client.transfer(
-                &env.current_contract_address(),
-                &stream.sender,
-                &to_sender,
-            );
+            token_client.transfer(&env.current_contract_address(), &stream.sender, &to_sender);
         }
 
         env.events().publish(
@@ -324,7 +322,7 @@ impl Contract {
 
             let term1 = (q_pow_n - scale) * step_duration;
             let term2 = (q_pow_n * delta_t * m_bps) / 10000;
-            
+
             let numerator = stream.total_amount * (term1 + term2);
             let denominator = (q_pow_total - scale) * step_duration;
 
@@ -397,14 +395,14 @@ impl Contract {
         Ok(())
     }
 
-    pub fn create_stream(
-        env: Env,
-        args: StreamArgs,
-    ) -> Result<u64, ContractError> {
+    pub fn create_stream(env: Env, args: StreamArgs) -> Result<u64, ContractError> {
         Self::require_not_paused(&env)?;
         args.sender.require_auth();
 
-        if args.start_time >= args.end_time || args.cliff_time < args.start_time || args.cliff_time > args.end_time {
+        if args.start_time >= args.end_time
+            || args.cliff_time < args.start_time
+            || args.cliff_time > args.end_time
+        {
             return Err(ContractError::InvalidTimeRange);
         }
 

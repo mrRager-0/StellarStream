@@ -1,18 +1,29 @@
 #![cfg(test)]
 
 use super::*;
+use crate::types::{PermitArgs, StreamArgs};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token::TokenClient,
     Address, Env,
 };
-use crate::types::{StreamArgs, PermitArgs};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-fn create_token<'a>(env: &Env, admin: &Address) -> (Address, TokenClient<'a>, soroban_sdk::token::StellarAssetClient<'a>) {
+fn create_token<'a>(
+    env: &Env,
+    admin: &Address,
+) -> (
+    Address,
+    TokenClient<'a>,
+    soroban_sdk::token::StellarAssetClient<'a>,
+) {
     let addr = env.register_stellar_asset_contract(admin.clone());
-    (addr.clone(), TokenClient::new(env, &addr), soroban_sdk::token::StellarAssetClient::new(env, &addr))
+    (
+        addr.clone(),
+        TokenClient::new(env, &addr),
+        soroban_sdk::token::StellarAssetClient::new(env, &addr),
+    )
 }
 
 /// Register the V2 contract, call init(), and return its address + client.
@@ -658,19 +669,17 @@ fn test_cliff_period_locks_funds() {
     let end_time = 200;
     let total_amount = 100_000_000;
 
-    let sid = v2_client.create_stream(
-        &StreamArgs {
-            sender: sender.clone(),
-            receiver: receiver.clone(),
-            token: token_id.clone(),
-            total_amount,
-            start_time,
-            cliff_time,
-            end_time,
-            step_duration: 0,
-            multiplier_bps: 0,
-        }
-    );
+    let sid = v2_client.create_stream(&StreamArgs {
+        sender: sender.clone(),
+        receiver: receiver.clone(),
+        token: token_id.clone(),
+        total_amount,
+        start_time,
+        cliff_time,
+        end_time,
+        step_duration: 0,
+        multiplier_bps: 0,
+    });
 
     // 1. Before cliff (t=140): unlocked should be zero
     env.ledger().with_mut(|li| li.timestamp = 140);
@@ -706,19 +715,17 @@ fn test_v2_cancel_splits_funds() {
     asset_client.mint(&sender, &100_000_000);
 
     // Create stream: t=0 to t=100. amount=100,000,000. no cliff.
-    let sid = v2_client.create_stream(
-        &StreamArgs {
-            sender: sender.clone(),
-            receiver: receiver.clone(),
-            token: token_id.clone(),
-            total_amount: 100_000_000,
-            start_time: 0,
-            cliff_time: 0,
-            end_time: 100,
-            step_duration: 0,
-            multiplier_bps: 0,
-        }
-    );
+    let sid = v2_client.create_stream(&StreamArgs {
+        sender: sender.clone(),
+        receiver: receiver.clone(),
+        token: token_id.clone(),
+        total_amount: 100_000_000,
+        start_time: 0,
+        cliff_time: 0,
+        end_time: 100,
+        step_duration: 0,
+        multiplier_bps: 0,
+    });
 
     // Cancel at t=30.
     // Unlocked = 100,000,000 * 30/100 = 30,000,000.
@@ -770,19 +777,17 @@ fn test_geometric_rate_unlock_math() {
     // t=75 (Middle of step 1): 333.33 + (6.666 * 2) * 25 = 333.33 + 333.33 = 666.66
     // t=100 (End of stream): 333.33 + (6.666 * 2) * 50 = 333.33 + 666.66 = 1000
 
-    let sid = v2_client.create_stream(
-        &StreamArgs {
-            sender: sender.clone(),
-            receiver: receiver.clone(),
-            token: token_id.clone(),
-            total_amount: 100_000_000,
-            start_time: 0,
-            cliff_time: 0,
-            end_time: 100,
-            step_duration: 50,
-            multiplier_bps: 10000,
-        }
-    );
+    let sid = v2_client.create_stream(&StreamArgs {
+        sender: sender.clone(),
+        receiver: receiver.clone(),
+        token: token_id.clone(),
+        total_amount: 100_000_000,
+        start_time: 0,
+        cliff_time: 0,
+        end_time: 100,
+        step_duration: 50,
+        multiplier_bps: 10000,
+    });
 
     // t=25
     env.ledger().with_mut(|li| li.timestamp = 25);
