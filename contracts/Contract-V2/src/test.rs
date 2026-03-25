@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use super::*;
+use crate::types::{PermitArgs, StreamArgs};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token::TokenClient,
@@ -9,12 +10,20 @@ use soroban_sdk::{
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/// Register a Stellar asset contract and return (token_address, token_client).
-fn create_token<'a>(env: &Env, admin: &Address) -> (Address, TokenClient<'a>) {
-    let addr = env
-        .register_stellar_asset_contract_v2(admin.clone())
-        .address();
-    (addr.clone(), TokenClient::new(env, &addr))
+fn create_token<'a>(
+    env: &Env,
+    admin: &Address,
+) -> (
+    Address,
+    TokenClient<'a>,
+    soroban_sdk::token::StellarAssetClient<'a>,
+) {
+    let addr = env.register_stellar_asset_contract(admin.clone());
+    (
+        addr.clone(),
+        TokenClient::new(env, &addr),
+        soroban_sdk::token::StellarAssetClient::new(env, &addr),
+    )
 }
 
 /// Register the V2 contract, call init(), and return its address + client.
@@ -198,7 +207,7 @@ fn test_migrate_stream_creates_v2_stream() {
     let sender = Address::generate(&env);
     let receiver = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let (token_id, _) = create_token(&env, &token_admin);
+    let (token_id, _, _) = create_token(&env, &token_admin);
 
     // Register mock V1 and seed it with a stream.
     let v1_id = env.register(MockV1, ());
@@ -236,7 +245,7 @@ fn test_migrate_stream_calls_v1_cancel() {
     let sender = Address::generate(&env);
     let receiver = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let (token_id, _) = create_token(&env, &token_admin);
+    let (token_id, _, _) = create_token(&env, &token_admin);
 
     let v1_id = env.register(MockV1, ());
     let v1_client = MockV1Client::new(&env, &v1_id);
@@ -260,7 +269,7 @@ fn test_migrate_stream_fails_if_not_receiver() {
     let receiver = Address::generate(&env);
     let stranger = Address::generate(&env); // not the receiver
     let token_admin = Address::generate(&env);
-    let (token_id, _) = create_token(&env, &token_admin);
+    let (token_id, _, _) = create_token(&env, &token_admin);
 
     let v1_id = env.register(MockV1, ());
     let v1_client = MockV1Client::new(&env, &v1_id);
@@ -282,7 +291,7 @@ fn test_migrate_stream_fails_if_already_cancelled() {
     let sender = Address::generate(&env);
     let receiver = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let (token_id, _) = create_token(&env, &token_admin);
+    let (token_id, _, _) = create_token(&env, &token_admin);
 
     let mut stream = make_v1_stream(&env, &sender, &receiver, &token_id);
     stream.cancelled = true; // already cancelled
@@ -308,7 +317,7 @@ fn test_migrate_stream_fails_if_stream_ended() {
     let sender = Address::generate(&env);
     let receiver = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let (token_id, _) = create_token(&env, &token_admin);
+    let (token_id, _, _) = create_token(&env, &token_admin);
 
     let v1_id = env.register(MockV1, ());
     let v1_client = MockV1Client::new(&env, &v1_id);
@@ -331,7 +340,7 @@ fn test_migrate_stream_remaining_balance_correct_at_25_percent() {
     let sender = Address::generate(&env);
     let receiver = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let (token_id, _) = create_token(&env, &token_admin);
+    let (token_id, _, _) = create_token(&env, &token_admin);
 
     let v1_id = env.register(MockV1, ());
     let v1_client = MockV1Client::new(&env, &v1_id);
@@ -353,7 +362,7 @@ fn test_permit_stream_fails_with_wrong_nonce() {
     let admin = Address::generate(&env);
     let receiver = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let (token_id, _) = create_token(&env, &token_admin);
+    let (token_id, _, _) = create_token(&env, &token_admin);
     let (_, v2_client) = setup_v2(&env, &admin);
 
     // Generate a dummy keypair (32-byte pubkey, 64-byte sig)
@@ -362,8 +371,19 @@ fn test_permit_stream_fails_with_wrong_nonce() {
 
     // Nonce 99 != stored nonce 0 — should fail with InvalidNonce
     let result = v2_client.try_create_stream_with_signature(
-        &pubkey, &receiver, &token_id, &1000i128, &0u64, &200u64, &99u64,   // wrong nonce
-        &9999u64, // deadline far in future
+        &PermitArgs {
+            sender_pubkey: pubkey.clone(),
+            receiver: receiver.clone(),
+            token: token_id.clone(),
+            total_amount: 1000i128,
+            start_time: 0u64,
+            cliff_time: 0u64,
+            end_time: 200u64,
+            nonce: 99u64, // wrong
+            deadline: 9999u64,
+            step_duration: 0,
+            multiplier_bps: 0,
+        },
         &bad_sig,
     );
     assert!(result.is_err());
@@ -378,7 +398,7 @@ fn test_permit_stream_fails_if_deadline_passed() {
     let admin = Address::generate(&env);
     let receiver = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let (token_id, _) = create_token(&env, &token_admin);
+    let (token_id, _, _) = create_token(&env, &token_admin);
     let (_, v2_client) = setup_v2(&env, &admin);
 
     let pubkey = soroban_sdk::BytesN::from_array(&env, &[1u8; 32]);
@@ -386,8 +406,19 @@ fn test_permit_stream_fails_if_deadline_passed() {
 
     // deadline = 100, now = 500 — expired
     let result = v2_client.try_create_stream_with_signature(
-        &pubkey, &receiver, &token_id, &1000i128, &0u64, &200u64, &0u64,   // correct nonce
-        &100u64, // expired deadline
+        &PermitArgs {
+            sender_pubkey: pubkey.clone(),
+            receiver: receiver.clone(),
+            token: token_id.clone(),
+            total_amount: 1000i128,
+            start_time: 0u64,
+            cliff_time: 0u64,
+            end_time: 200u64,
+            nonce: 0u64,
+            deadline: 100u64, // expired
+            step_duration: 0,
+            multiplier_bps: 0,
+        },
         &bad_sig,
     );
     assert!(result.is_err());
@@ -429,7 +460,7 @@ fn test_migrate_stream_fails_when_paused() {
     let sender = Address::generate(&env);
     let receiver = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let (token_id, _) = create_token(&env, &token_admin);
+    let (token_id, _, _) = create_token(&env, &token_admin);
 
     let v1_id = env.register(MockV1, ());
     let v1_client = MockV1Client::new(&env, &v1_id);
@@ -453,7 +484,7 @@ fn test_permit_stream_fails_when_paused() {
     let admin = Address::generate(&env);
     let receiver = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let (token_id, _) = create_token(&env, &token_admin);
+    let (token_id, _, _) = create_token(&env, &token_admin);
     let (_, client) = setup_v2(&env, &admin);
 
     client.pause();
@@ -462,7 +493,20 @@ fn test_permit_stream_fails_when_paused() {
     let bad_sig = soroban_sdk::BytesN::from_array(&env, &[0u8; 64]);
 
     let result = client.try_create_stream_with_signature(
-        &pubkey, &receiver, &token_id, &1000i128, &0u64, &200u64, &0u64, &9999u64, &bad_sig,
+        &PermitArgs {
+            sender_pubkey: pubkey.clone(),
+            receiver: receiver.clone(),
+            token: token_id.clone(),
+            total_amount: 1000i128,
+            start_time: 0u64,
+            cliff_time: 0u64,
+            end_time: 200u64,
+            nonce: 0u64,
+            deadline: 9999u64,
+            step_duration: 0,
+            multiplier_bps: 0,
+        },
+        &bad_sig,
     );
     assert!(result.is_err());
 }
@@ -479,7 +523,7 @@ fn test_bump_active_streams_ttl_returns_count_of_existing() {
     let sender = Address::generate(&env);
     let receiver = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let (token_id, _) = create_token(&env, &token_admin);
+    let (token_id, _, _) = create_token(&env, &token_admin);
     let (_, v2_client) = setup_v2(&env, &admin);
 
     // Mint and approve tokens so migrate_stream can pull them
@@ -578,7 +622,7 @@ fn test_get_v2_protocol_health_updates_correctly() {
     let sender = Address::generate(&env);
     let receiver = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let (token_id, _) = create_token(&env, &token_admin);
+    let (token_id, _, _) = create_token(&env, &token_admin);
 
     let v1_id = env.register(MockV1, ());
     let v1_client = MockV1Client::new(&env, &v1_id);
@@ -599,4 +643,169 @@ fn test_get_v2_protocol_health_updates_correctly() {
     assert_eq!(health.total_v2_tvl, 500);
     assert_eq!(health.active_v2_users, 2);
     assert_eq!(health.total_v2_streams, 1);
+}
+
+// ── Cliff and Withdraw/Cancel tests ───────────────────────────────────────────
+
+#[test]
+fn test_cliff_period_locks_funds() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let sender = Address::generate(&env);
+    let receiver = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let (token_id, token_client, asset_client) = create_token(&env, &token_admin);
+    let (_, v2_client) = setup_v2(&env, &admin);
+
+    // Mint tokens to sender
+    asset_client.mint(&sender, &100_000_000);
+
+    // Create a stream with a cliff.
+    // Start: 100, Cliff: 150, End: 200. Amount: 100,000,000.
+    let start_time = 100;
+    let cliff_time = 150;
+    let end_time = 200;
+    let total_amount = 100_000_000;
+
+    let sid = v2_client.create_stream(&StreamArgs {
+        sender: sender.clone(),
+        receiver: receiver.clone(),
+        token: token_id.clone(),
+        total_amount,
+        start_time,
+        cliff_time,
+        end_time,
+        step_duration: 0,
+        multiplier_bps: 0,
+    });
+
+    // 1. Before cliff (t=140): unlocked should be zero
+    env.ledger().with_mut(|li| li.timestamp = 140);
+    let result = v2_client.try_withdraw(&sid, &receiver);
+    assert!(result.is_err()); // Nothing to withdraw / Error::NothingToMigrate for now
+
+    // 2. At cliff (t=150): unlocked should jump to accumulated amount
+    // accumulated = 100,000,000 * (150-100)/(200-100) = 100,000,000 * 50/100 = 50,000,000
+    env.ledger().with_mut(|li| li.timestamp = 150);
+    v2_client.withdraw(&sid, &receiver);
+    // At t=150: 100,000,000 * (150-100)/(200-100) = 50,000,000
+    assert_eq!(token_client.balance(&receiver), 50_000_000);
+
+    // 3. After cliff (t=175): 100,000,000 * (175-100)/(200-100) = 75,000,000 total unlocked.
+    // 75,000,000 - 50,000,000 (already withdrawn) = 25,000,000 available.
+    env.ledger().with_mut(|li| li.timestamp = 175);
+    v2_client.withdraw(&sid, &receiver);
+    assert_eq!(token_client.balance(&receiver), 75_000_000);
+}
+
+#[test]
+fn test_v2_cancel_splits_funds() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let sender = Address::generate(&env);
+    let receiver = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let (token_id, token_client, asset_client) = create_token(&env, &token_admin);
+    let (_, v2_client) = setup_v2(&env, &admin);
+
+    asset_client.mint(&sender, &100_000_000);
+
+    // Create stream: t=0 to t=100. amount=100,000,000. no cliff.
+    let sid = v2_client.create_stream(&StreamArgs {
+        sender: sender.clone(),
+        receiver: receiver.clone(),
+        token: token_id.clone(),
+        total_amount: 100_000_000,
+        start_time: 0,
+        cliff_time: 0,
+        end_time: 100,
+        step_duration: 0,
+        multiplier_bps: 0,
+    });
+
+    // Cancel at t=30.
+    // Unlocked = 100,000,000 * 30/100 = 30,000,000.
+    // to_receiver = 30,000,000, to_sender = 100,000,000 - 30,000,000 = 70,000,000.
+    env.ledger().with_mut(|li| li.timestamp = 30);
+    v2_client.cancel(&sid, &sender);
+
+    assert_eq!(token_client.balance(&receiver), 30_000_000);
+    assert_eq!(token_client.balance(&sender), 70_000_000);
+}
+
+// ── Escalating Rates (Issue #363) tests ─────────────────────────────────────
+
+#[test]
+fn test_geometric_rate_unlock_math() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let sender = Address::generate(&env);
+    let receiver = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let (token_id, token_client, asset_client) = create_token(&env, &token_admin);
+    let (_, v2_client) = setup_v2(&env, &admin);
+
+    asset_client.mint(&sender, &100_000_000);
+
+    // Step-up stream:
+    // Total: 100,000,000
+    // Duration: 100s (e.g. t=0 to t=100)
+    // Step: 50s
+    // Multiplier: 100% increase (10000 bps)
+    // N = 100/50 = 2 steps
+    // q = 1 + 1 = 2
+    // S_2 = (2^2 - 1)/(2 - 1) = 3
+    // Unlocked should be:
+    // t=0: 0
+    // t=25: 1000 * [ (2^0 - 1)*50 + 2^0 * 25 * 1 ] / [ 3 * 50 / 1 ] = 1000 * 25 / 150 = 166.66
+    // Wait, let's use the formula from code:
+    // numerator = 1000 * [ (1-1)*50 + 1 * 25 * 10000/10000 ] = 1000 * 25 = 25000
+    // denominator = 4*1e9/1e9 - 1 = 3? No, power_scale returns 1e9 * q^n.
+    // denominator = 1e9 * 2^2 - 1e9 = 3e9.
+    // numerator = 1000 * [ (1e9 - 1e9)*50 + 1e9 * 25 * 1 ] = 1000 * 25e9 = 25000e9.
+    // unlocked = 25000e9 / 3e9 = 8333.
+    // Wait, my manual calculation is wrong.
+    // Initial rate R0: A = R0 * D * S_N => 1000 = R0 * 50 * (1 + 2) = R0 * 150 => R0 = 1000 / 150 = 6.666
+    // t=25: 6.666 * 25 = 166.66
+    // t=50 (End of step 0): 6.666 * 50 = 333.33
+    // t=75 (Middle of step 1): 333.33 + (6.666 * 2) * 25 = 333.33 + 333.33 = 666.66
+    // t=100 (End of stream): 333.33 + (6.666 * 2) * 50 = 333.33 + 666.66 = 1000
+
+    let sid = v2_client.create_stream(&StreamArgs {
+        sender: sender.clone(),
+        receiver: receiver.clone(),
+        token: token_id.clone(),
+        total_amount: 100_000_000,
+        start_time: 0,
+        cliff_time: 0,
+        end_time: 100,
+        step_duration: 50,
+        multiplier_bps: 10000,
+    });
+
+    // t=25
+    env.ledger().with_mut(|li| li.timestamp = 25);
+    v2_client.withdraw(&sid, &receiver);
+    assert!(token_client.balance(&receiver) >= 16_666_000);
+
+    // t=50
+    env.ledger().with_mut(|li| li.timestamp = 50);
+    v2_client.withdraw(&sid, &receiver);
+    assert!(token_client.balance(&receiver) >= 33_333_000);
+
+    // t=75
+    env.ledger().with_mut(|li| li.timestamp = 75);
+    v2_client.withdraw(&sid, &receiver);
+    assert!(token_client.balance(&receiver) >= 66_666_000);
+
+    // t=100
+    env.ledger().with_mut(|li| li.timestamp = 100);
+    v2_client.withdraw(&sid, &receiver);
+    assert_eq!(token_client.balance(&receiver), 100_000_000);
 }

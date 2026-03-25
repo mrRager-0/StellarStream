@@ -1,6 +1,4 @@
-use soroban_sdk::contracterror;
-
-#[contracterror]
+#[soroban_sdk::contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
 pub enum ContractError {
@@ -15,4 +13,8 @@ pub enum ContractError {
     NotEnoughSigners = 9,
     BelowDustThreshold = 10,
     ContractPaused = 11,
+    InsufficientBalance = 12,
+    StreamNotFound = 13,
+    InvalidTimeRange = 14,
+    AlreadyCancelled = 15,
 }

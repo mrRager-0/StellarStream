@@ -9,8 +9,9 @@ mod types;
 mod v1_interface;
 
 use errors::ContractError;
-use types::{
-    ContractPausedEvent, ContractUnpausedEvent, PermitStreamCreatedEvent, StreamMigratedEvent,
+pub use types::{
+    ContractPausedEvent, ContractUnpausedEvent, PermitArgs, PermitStreamCreatedEvent, StreamArgs,
+    StreamCancelledV2Event, StreamClaimV2Event, StreamCreatedV2Event, StreamMigratedEvent,
     StreamV2,
 };
 use v1_interface::Client as V1Client;
@@ -151,10 +152,13 @@ impl Contract {
             total_amount: remaining,
             start_time: now,
             end_time: v1_stream.end_time,
+            cliff_time: now, // migrated streams have no cliff in V2
             withdrawn_amount: 0,
             cancelled: false,
             migrated_from_v1: true,
             v1_stream_id,
+            step_duration: 0,
+            multiplier_bps: 0,
         };
 
         storage::set_stream(&env, v2_stream_id, &v2_stream);
@@ -183,31 +187,179 @@ impl Contract {
     }
 
     // ----------------------------------------------------------------
-    // Issue #404 — Bulk TTL Extension
+    // Stream Operations (Issue #363 — Escalating Rates)
     // ----------------------------------------------------------------
 
-    /// Extend persistent storage TTL for each stream ID in `ids`.
-    ///
-    /// Public and permissionless — anyone (altruistic keeper, incentivised
-    /// bot, or the stream participants themselves) can call this to prevent
-    /// active streams from expiring due to storage rent.
-    ///
-    /// Returns the number of streams whose TTL was actually extended
-    /// (IDs that no longer exist are silently skipped).
+    pub fn withdraw(env: Env, stream_id: u64, receiver: Address) -> Result<i128, ContractError> {
+        Self::require_not_paused(&env)?;
+        receiver.require_auth();
+
+        let mut stream =
+            storage::get_stream(&env, stream_id).ok_or(ContractError::StreamNotFound)?;
+
+        if stream.receiver != receiver {
+            return Err(ContractError::NotStreamOwner);
+        }
+
+        if stream.cancelled {
+            return Err(ContractError::AlreadyCancelled);
+        }
+
+        let now = env.ledger().timestamp();
+        let unlocked = Self::calculate_unlocked_internal(&stream, now);
+        let to_withdraw = unlocked.saturating_sub(stream.withdrawn_amount);
+
+        if to_withdraw <= 0 {
+            return Err(ContractError::NothingToMigrate); // TODO: Add NothingToWithdraw
+        }
+
+        // Perform transfer
+        let token_client = soroban_sdk::token::TokenClient::new(&env, &stream.token);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &stream.receiver,
+            &to_withdraw,
+        );
+
+        // Update state
+        stream.withdrawn_amount += to_withdraw;
+        storage::set_stream(&env, stream_id, &stream);
+
+        // Update analytics (TVL decreased)
+        storage::update_stats(&env, -to_withdraw, &stream.sender, &stream.receiver);
+
+        env.events().publish(
+            (symbol_short!("claim"), receiver.clone()),
+            StreamClaimV2Event {
+                stream_id,
+                receiver: receiver.clone(),
+                amount: to_withdraw,
+                total_claimed: stream.withdrawn_amount,
+                timestamp: now,
+            },
+        );
+
+        Ok(to_withdraw)
+    }
+
+    pub fn cancel(env: Env, stream_id: u64, caller: Address) -> Result<(), ContractError> {
+        Self::require_not_paused(&env)?;
+        caller.require_auth();
+
+        let mut stream =
+            storage::get_stream(&env, stream_id).ok_or(ContractError::StreamNotFound)?;
+
+        if stream.sender != caller && stream.receiver != caller {
+            return Err(ContractError::NotStreamOwner);
+        }
+
+        if stream.cancelled {
+            return Err(ContractError::AlreadyCancelled);
+        }
+
+        let now = env.ledger().timestamp();
+        let unlocked = Self::calculate_unlocked_internal(&stream, now);
+        let to_receiver = unlocked.saturating_sub(stream.withdrawn_amount);
+        let to_sender = stream.total_amount.saturating_sub(unlocked);
+
+        stream.withdrawn_amount = unlocked;
+        stream.cancelled = true;
+        storage::set_stream(&env, stream_id, &stream);
+
+        let token_client = soroban_sdk::token::TokenClient::new(&env, &stream.token);
+        if to_receiver > 0 {
+            token_client.transfer(
+                &env.current_contract_address(),
+                &stream.receiver,
+                &to_receiver,
+            );
+        }
+        if to_sender > 0 {
+            token_client.transfer(&env.current_contract_address(), &stream.sender, &to_sender);
+        }
+
+        env.events().publish(
+            (symbol_short!("cancel"), caller.clone()),
+            StreamCancelledV2Event {
+                stream_id,
+                canceller: caller,
+                to_receiver,
+                to_sender,
+                timestamp: now,
+            },
+        );
+
+        Ok(())
+    }
+
+    fn calculate_unlocked_internal(stream: &StreamV2, now: u64) -> i128 {
+        if now < stream.cliff_time || now <= stream.start_time {
+            return 0;
+        }
+        if now >= stream.end_time {
+            return stream.total_amount;
+        }
+        if stream.cancelled {
+            return stream.total_amount;
+        }
+
+        if stream.step_duration > 0 {
+            let elapsed = (now - stream.start_time) as i128;
+            let duration = (stream.end_time - stream.start_time) as i128;
+            let step_duration = stream.step_duration;
+            let n_steps = (elapsed / step_duration) as u32;
+            let delta_t = elapsed % step_duration;
+
+            let m_bps = stream.multiplier_bps;
+            let q_bps = 10000 + m_bps;
+
+            let total_steps = (duration / step_duration) as u32;
+
+            let q_pow_total = Self::power_scale(q_bps, total_steps);
+            let q_pow_n = Self::power_scale(q_bps, n_steps);
+
+            let scale = 1_000_000_000_i128;
+
+            let term1 = (q_pow_n - scale) * step_duration;
+            let term2 = (q_pow_n * delta_t * m_bps) / 10000;
+
+            let numerator = stream.total_amount * (term1 + term2);
+            let denominator = (q_pow_total - scale) * step_duration;
+
+            if denominator <= 0 {
+                return (stream.total_amount * elapsed) / duration;
+            }
+
+            numerator / denominator
+        } else {
+            let elapsed = (now - stream.start_time) as i128;
+            let duration = (stream.end_time - stream.start_time) as i128;
+            (stream.total_amount * elapsed) / duration
+        }
+    }
+
+    fn power_scale(q_bps: i128, n: u32) -> i128 {
+        let mut res = 1_000_000_000_i128;
+        let mut base = q_bps;
+        let mut exp = n;
+        while exp > 0 {
+            if exp % 2 == 1 {
+                res = (res * base) / 10000;
+            }
+            base = (base * base) / 10000;
+            exp /= 2;
+        }
+        res
+    }
+
     pub fn bump_active_streams_ttl(env: Env, ids: Vec<u64>) -> u32 {
         storage::bump_streams_ttl(&env, &ids)
     }
 
-    // ----------------------------------------------------------------
-    // Emergency Pause (Issue #364)
-    // ----------------------------------------------------------------
-
     pub fn pause(env: Env) -> Result<(), ContractError> {
         let admin = storage::get_admin(&env);
         admin.require_auth();
-
         storage::set_paused(&env, true);
-
         env.events().publish(
             (symbol_short!("pause"), admin.clone()),
             ContractPausedEvent {
@@ -215,16 +367,13 @@ impl Contract {
                 timestamp: env.ledger().timestamp(),
             },
         );
-
         Ok(())
     }
 
     pub fn unpause(env: Env) -> Result<(), ContractError> {
         let admin = storage::get_admin(&env);
         admin.require_auth();
-
         storage::set_paused(&env, false);
-
         env.events().publish(
             (symbol_short!("unpause"), admin.clone()),
             ContractUnpausedEvent {
@@ -232,7 +381,6 @@ impl Contract {
                 timestamp: env.ledger().timestamp(),
             },
         );
-
         Ok(())
     }
 
@@ -247,108 +395,158 @@ impl Contract {
         Ok(())
     }
 
-    // ----------------------------------------------------------------
-    // Issue #360 — Permit Streaming
-    // ----------------------------------------------------------------
+    pub fn create_stream(env: Env, args: StreamArgs) -> Result<u64, ContractError> {
+        Self::require_not_paused(&env)?;
+        args.sender.require_auth();
+
+        if args.start_time >= args.end_time
+            || args.cliff_time < args.start_time
+            || args.cliff_time > args.end_time
+        {
+            return Err(ContractError::InvalidTimeRange);
+        }
+
+        if args.total_amount < storage::get_min_value(&env, &args.token) {
+            return Err(ContractError::BelowDustThreshold);
+        }
+
+        let token_client = soroban_sdk::token::TokenClient::new(&env, &args.token);
+        token_client.transfer(
+            &args.sender,
+            &env.current_contract_address(),
+            &args.total_amount,
+        );
+
+        let stream_id = storage::next_stream_id(&env);
+
+        let stream = StreamV2 {
+            sender: args.sender.clone(),
+            receiver: args.receiver.clone(),
+            token: args.token.clone(),
+            total_amount: args.total_amount,
+            start_time: args.start_time,
+            end_time: args.end_time,
+            cliff_time: args.cliff_time,
+            withdrawn_amount: 0,
+            cancelled: false,
+            migrated_from_v1: false,
+            v1_stream_id: 0,
+            step_duration: args.step_duration,
+            multiplier_bps: args.multiplier_bps,
+        };
+
+        storage::set_stream(&env, stream_id, &stream);
+        storage::update_stats(&env, args.total_amount, &args.sender, &args.receiver);
+
+        env.events().publish(
+            (symbol_short!("create_v2"), args.sender.clone()),
+            StreamCreatedV2Event {
+                stream_id,
+                sender: args.sender,
+                receiver: args.receiver,
+                token: args.token,
+                total_amount: args.total_amount,
+                start_time: args.start_time,
+                cliff_time: args.cliff_time,
+                end_time: args.end_time,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+
+        Ok(stream_id)
+    }
 
     pub fn create_stream_with_signature(
         env: Env,
-        sender_pubkey: soroban_sdk::BytesN<32>,
-        receiver: Address,
-        token: Address,
-        total_amount: i128,
-        start_time: u64,
-        end_time: u64,
-        nonce: u64,
-        deadline: u64,
+        args: PermitArgs,
         signature: soroban_sdk::BytesN<64>,
     ) -> Result<u64, ContractError> {
         Self::require_not_paused(&env)?;
         let now = env.ledger().timestamp();
 
-        // ── Guard: deadline ──────────────────────────────────────────
-        if now > deadline {
+        if now > args.deadline {
             return Err(ContractError::ExpiredDeadline);
         }
 
-        // ── Guard: dust threshold ─────────────────────────────────────
-        if total_amount < storage::get_min_value(&env, &token) {
+        if args.total_amount < storage::get_min_value(&env, &args.token) {
             return Err(ContractError::BelowDustThreshold);
         }
 
-        // ── Guard: nonce ─────────────────────────────────────────────
-        let nonce_key = (symbol_short!("NONCE"), sender_pubkey.clone());
+        let nonce_key = (symbol_short!("NONCE"), args.sender_pubkey.clone());
         let stored_nonce: u64 = env.storage().instance().get(&nonce_key).unwrap_or(0u64);
 
-        if nonce != stored_nonce {
+        if args.nonce != stored_nonce {
             return Err(ContractError::InvalidNonce);
         }
 
-        // ── Build canonical message ───────────────────────────────────
         let mut msg = soroban_sdk::Bytes::new(&env);
         msg.extend_from_slice(b"STELLARSTREAM_PERMIT_V2");
         msg.append(&env.current_contract_address().to_xdr(&env));
-        msg.append(&sender_pubkey.clone().into());
-        msg.append(&receiver.clone().to_xdr(&env));
-        msg.append(&token.clone().to_xdr(&env));
+        msg.append(&args.sender_pubkey.clone().into());
+        msg.append(&args.receiver.clone().to_xdr(&env));
+        msg.append(&args.token.clone().to_xdr(&env));
 
-        msg.extend_from_slice(&total_amount.to_be_bytes());
-        msg.extend_from_slice(&start_time.to_be_bytes());
-        msg.extend_from_slice(&end_time.to_be_bytes());
-        msg.extend_from_slice(&nonce.to_be_bytes());
-        msg.extend_from_slice(&deadline.to_be_bytes());
+        msg.extend_from_slice(&args.total_amount.to_be_bytes());
+        msg.extend_from_slice(&args.start_time.to_be_bytes());
+        msg.extend_from_slice(&args.cliff_time.to_be_bytes());
+        msg.extend_from_slice(&args.end_time.to_be_bytes());
+        msg.extend_from_slice(&args.nonce.to_be_bytes());
+        msg.extend_from_slice(&args.deadline.to_be_bytes());
 
-        // ── Verify signature ─────────────────────────────────────────
-        // ed25519_verify panics on invalid signature
+        if args.step_duration > 0 {
+            msg.extend_from_slice(&args.step_duration.to_be_bytes());
+            msg.extend_from_slice(&args.multiplier_bps.to_be_bytes());
+        }
+
         let msg_hash: soroban_sdk::BytesN<32> = env.crypto().sha256(&msg).into();
         env.crypto()
-            .ed25519_verify(&sender_pubkey, &msg_hash.into(), &signature);
+            .ed25519_verify(&args.sender_pubkey, &msg_hash.into(), &signature);
 
-        // ── Consume nonce ─────────────────────────────────────────────
         env.storage()
             .instance()
             .set(&nonce_key, &(stored_nonce + 1));
 
-        // ── Pull tokens from sender ───────────────────────────────────
-        let token_client = soroban_sdk::token::TokenClient::new(&env, &token);
-        let sender_addr = Address::from_string_bytes(&sender_pubkey.clone().into());
+        let token_client = soroban_sdk::token::TokenClient::new(&env, &args.token);
+        let sender_addr = Address::from_string_bytes(&args.sender_pubkey.clone().into());
 
         token_client.transfer_from(
             &env.current_contract_address(),
             &sender_addr,
             &env.current_contract_address(),
-            &total_amount,
+            &args.total_amount,
         );
 
-        // ── Create V2 stream ─────────────────────────────────────────
         let stream_id = storage::next_stream_id(&env);
 
         let stream = StreamV2 {
             sender: sender_addr.clone(),
-            receiver: receiver.clone(),
-            token: token.clone(),
-            total_amount,
-            start_time,
-            end_time,
+            receiver: args.receiver.clone(),
+            token: args.token.clone(),
+            total_amount: args.total_amount,
+            start_time: args.start_time,
+            end_time: args.end_time,
+            cliff_time: args.cliff_time,
             withdrawn_amount: 0,
             cancelled: false,
             migrated_from_v1: false,
             v1_stream_id: 0,
+            step_duration: args.step_duration,
+            multiplier_bps: args.multiplier_bps,
         };
 
         storage::set_stream(&env, stream_id, &stream);
-        storage::update_stats(&env, total_amount, &sender_addr, &receiver);
+        storage::update_stats(&env, args.total_amount, &sender_addr, &args.receiver);
 
-        // ── Emit event ────────────────────────────────────────────────
         env.events().publish(
-            (symbol_short!("permit"), receiver.clone()),
+            (symbol_short!("permit"), args.receiver.clone()),
             PermitStreamCreatedEvent {
                 stream_id,
-                sender_pubkey: sender_pubkey.clone(),
-                receiver,
-                token,
-                total_amount,
-                nonce,
+                sender_pubkey: args.sender_pubkey,
+                receiver: args.receiver,
+                token: args.token,
+                total_amount: args.total_amount,
+                cliff_time: args.cliff_time,
+                nonce: args.nonce,
                 timestamp: now,
             },
         );
