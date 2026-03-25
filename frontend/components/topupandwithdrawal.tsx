@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { ShieldAlert } from "lucide-react";
+import { useProtocolStatus } from "@/lib/use-protocol-status";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ModalAction = "withdraw" | "topup";
@@ -18,32 +20,32 @@ interface StreamModalProps {
 // ─── Config per action ────────────────────────────────────────────────────────
 const ACTION_CONFIG = {
   withdraw: {
-    label:       "Withdraw",
-    verb:        "Withdrawing",
-    icon:        "↑",
-    glow:        "#22d3ee",   // cyan
-    glowRgb:     "34,211,238",
-    accent:      "text-cyan-400",
-    border:      "border-cyan-400/40",
-    bg:          "bg-cyan-400/10",
-    btnBg:       "bg-cyan-400 hover:bg-cyan-300",
-    btnText:     "text-black",
+    label: "Withdraw",
+    verb: "Withdrawing",
+    icon: "↑",
+    glow: "#22d3ee",   // cyan
+    glowRgb: "34,211,238",
+    accent: "text-cyan-400",
+    border: "border-cyan-400/40",
+    bg: "bg-cyan-400/10",
+    btnBg: "bg-cyan-400 hover:bg-cyan-300",
+    btnText: "text-black",
     description: "Withdraw streamed funds to your wallet.",
-    balanceLabel:"Withdrawable",
+    balanceLabel: "Withdrawable",
   },
   topup: {
-    label:       "Top-Up",
-    verb:        "Topping up",
-    icon:        "↓",
-    glow:        "#a78bfa",   // violet
-    glowRgb:     "167,139,250",
-    accent:      "text-violet-400",
-    border:      "border-violet-400/40",
-    bg:          "bg-violet-400/10",
-    btnBg:       "bg-violet-400 hover:bg-violet-300",
-    btnText:     "text-black",
+    label: "Top-Up",
+    verb: "Topping up",
+    icon: "↓",
+    glow: "#a78bfa",   // violet
+    glowRgb: "167,139,250",
+    accent: "text-violet-400",
+    border: "border-violet-400/40",
+    bg: "bg-violet-400/10",
+    btnBg: "bg-violet-400 hover:bg-violet-300",
+    btnText: "text-black",
     description: "Add more funds to extend this stream.",
-    balanceLabel:"Wallet Balance",
+    balanceLabel: "Wallet Balance",
   },
 } as const;
 
@@ -124,7 +126,7 @@ function AmountInput({
   const handleMax = () => onChange(max.toFixed(2));
 
   const numVal = parseFloat(value) || 0;
-  const pct    = Math.min(numVal / max, 1);
+  const pct = Math.min(numVal / max, 1);
 
   return (
     <div className="space-y-3">
@@ -135,8 +137,8 @@ function AmountInput({
           borderColor: error
             ? "rgba(248,113,113,0.5)"
             : value
-            ? `rgba(${rgb},0.4)`
-            : "rgba(255,255,255,0.10)",
+              ? `rgba(${rgb},0.4)`
+              : "rgba(255,255,255,0.10)",
           boxShadow: value && !error
             ? `0 0 24px rgba(${rgb},0.12), inset 0 0 24px rgba(${rgb},0.04)`
             : "none",
@@ -168,7 +170,7 @@ function AmountInput({
               className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1 font-body text-xs font-bold text-white/50 transition hover:border-white/20 hover:text-white/80 hover:bg-white/[0.07]"
               style={{
                 borderColor: value === max.toFixed(2) ? `rgba(${rgb},0.4)` : undefined,
-                color:       value === max.toFixed(2) ? glow                : undefined,
+                color: value === max.toFixed(2) ? glow : undefined,
               }}
             >
               Max
@@ -184,7 +186,7 @@ function AmountInput({
               style={{
                 width: `${pct * 100}%`,
                 background: `linear-gradient(90deg, rgba(${rgb},0.5), ${glow})`,
-                boxShadow:  `0 0 8px rgba(${rgb},0.6)`,
+                boxShadow: `0 0 8px rgba(${rgb},0.6)`,
               }}
             />
           </div>
@@ -223,11 +225,12 @@ function StreamActionModal({
   onConfirm,
   onClose,
 }: StreamModalProps) {
-  const cfg     = ACTION_CONFIG[action];
-  const maxAmt  = action === "withdraw" ? availableBalance : walletBalance;
-  const [amount, setAmount]  = useState("");
-  const [error,  setError]   = useState<string | null>(null);
-  const [status, setStatus]  = useState<"idle" | "loading" | "success">("idle");
+  const { isEmergency } = useProtocolStatus();
+  const cfg = ACTION_CONFIG[action];
+  const maxAmt = action === "withdraw" ? availableBalance : walletBalance;
+  const [amount, setAmount] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
   const overlayRef = useRef<HTMLDivElement>(null);
 
   // Close on backdrop click
@@ -359,9 +362,17 @@ function StreamActionModal({
             </div>
 
             {/* CTA */}
+            {isEmergency && (
+              <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2.5 mb-2">
+                <ShieldAlert size={14} className="text-red-400 flex-shrink-0" />
+                <p className="font-body text-xs text-red-300/70">
+                  Disabled during Emergency Mode.
+                </p>
+              </div>
+            )}
             <button
               onClick={handleConfirm}
-              disabled={status === "loading"}
+              disabled={status === "loading" || isEmergency}
               className={`w-full rounded-2xl py-4 font-body text-base font-bold transition-all duration-200 ${cfg.btnBg} ${cfg.btnText} disabled:opacity-60 disabled:cursor-not-allowed`}
               style={{
                 boxShadow: status === "idle" && amount
@@ -373,8 +384,8 @@ function StreamActionModal({
               {status === "loading" ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                   </svg>
                   Confirming…
                 </span>

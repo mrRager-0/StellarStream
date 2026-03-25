@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Mirroring the Stream state from Soroban
+model Stream {
+  id              String       @id // The Contract ID or unique Stream ID
+  sender          String
+  receiver        String
+  tokenAddress    String
+  amountPerSecond BigInt
+  totalAmount     BigInt
+  status          StreamStatus @default(ACTIVE)
+  endTime         DateTime?
+
+  @@index([sender])
+  @@index([receiver])
+  @@index([endTime])
+}
+
+// Tracks the last synced blockchain state
+model SyncState {
+  id                 Int @id @default(1)
+  lastLedgerSequence Int @default(0)
+}
+
+enum StreamStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELED
+}

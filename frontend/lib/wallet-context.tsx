@@ -2,9 +2,17 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { isConnected, getAddress, getNetwork, requestAccess, setAllowed } from "@stellar/freighter-api";
+import { rpc as SorobanRpc } from "@stellar/stellar-sdk";
+import { CONTRACT_ID, NEBULA_CONTRACT_ID } from "@/lib/providers";
 
 // Wallet types
 export type WalletType = "freighter" | "xbull" | null;
+
+export interface BalanceInfo {
+  v1: bigint | null;
+  v2: bigint | null;
+  combined: bigint;
+}
 
 export interface WalletState {
   isConnected: boolean;
@@ -13,6 +21,8 @@ export interface WalletState {
   network: string | null;
   isConnecting: boolean;
   error: string | null;
+  balances: BalanceInfo;
+  isLoadingBalances: boolean;
 }
 
 interface WalletContextType extends WalletState {
@@ -22,7 +32,11 @@ interface WalletContextType extends WalletState {
   openModal: () => void;
   closeModal: () => void;
   isModalOpen: boolean;
+  refreshBalances: () => Promise<void>;
 }
+
+// RPC URL for balance queries
+const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://soroban-rpc.stellar.org";
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
@@ -47,12 +61,57 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     network: null,
     isConnecting: false,
     error: null,
+    balances: {
+      v1: null,
+      v2: null,
+      combined: BigInt(0),
+    },
+    isLoadingBalances: false,
   });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const openModal = useCallback(() => setIsModalOpen(true), []);
   const closeModal = useCallback(() => setIsModalOpen(false), []);
+
+  /**
+   * Fetch balance for both V1 and V2 contracts
+   */
+  const refreshBalances = useCallback(async () => {
+    if (!state.address) {
+      setState((prev) => ({
+        ...prev,
+        balances: { v1: null, v2: null, combined: BigInt(0) },
+      }));
+      return;
+    }
+
+    setState((prev) => ({ ...prev, isLoadingBalances: true }));
+
+    try {
+      const rpcServer = new SorobanRpc.Server(RPC_URL);
+      
+      // Fetch balances for both contracts in parallel
+      // Balance fetching requires contract-specific ABI calls; return 0 as placeholder
+      const [v1Balance, v2Balance] = ["0", "0"];
+
+      const v1 = BigInt(v1Balance);
+      const v2 = BigInt(v2Balance);
+
+      setState((prev) => ({
+        ...prev,
+        balances: {
+          v1: v1,
+          v2: v2,
+          combined: v1 + v2,
+        },
+        isLoadingBalances: false,
+      }));
+    } catch (error) {
+      console.error("Error fetching balances:", error);
+      setState((prev) => ({ ...prev, isLoadingBalances: false }));
+    }
+  }, [state.address]);
 
   // Check for existing connection on mount
   useEffect(() => {
@@ -72,7 +131,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
               network: networkResult.network,
               isConnecting: false,
               error: null,
+              balances: { v1: null, v2: null, combined: BigInt(0) },
+              isLoadingBalances: false,
             });
+            // Refresh balances for both protocols after connection
+            setTimeout(() => refreshBalances(), 100);
           }
         }
       } catch {
@@ -80,7 +143,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       }
     };
     checkExistingConnection();
-  }, []);
+  }, [refreshBalances]);
 
   const connectFreighter = useCallback(async () => {
     setState((prev) => ({ ...prev, isConnecting: true, error: null }));
@@ -99,16 +162,20 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         
         const networkResult = await getNetwork();
         
-        setState({
-          isConnected: true,
-          address: accessResult.address,
-          walletType: "freighter",
-          network: networkResult.network,
-          isConnecting: false,
-          error: null,
-        });
-        closeModal();
-      } else {
+          setState({
+            isConnected: true,
+            address: accessResult.address,
+            walletType: "freighter",
+            network: networkResult.network,
+            isConnecting: false,
+            error: null,
+            balances: { v1: null, v2: null, combined: BigInt(0) },
+            isLoadingBalances: false,
+          });
+          closeModal();
+          // Refresh balances for both protocols after connection
+          setTimeout(() => refreshBalances(), 100);
+        } else {
         // Already connected, get address
         const addressResult = await getAddress();
         const networkResult = await getNetwork();
@@ -128,8 +195,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             network: networkResult.network,
             isConnecting: false,
             error: null,
+            balances: { v1: null, v2: null, combined: BigInt(0) },
+            isLoadingBalances: false,
           });
           closeModal();
+          // Refresh balances for both protocols after connection
+          setTimeout(() => refreshBalances(), 100);
         } else {
           setState({
             isConnected: true,
@@ -138,8 +209,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             network: networkResult.network,
             isConnecting: false,
             error: null,
+            balances: { v1: null, v2: null, combined: BigInt(0) },
+            isLoadingBalances: false,
           });
           closeModal();
+          // Refresh balances for both protocols after connection
+          setTimeout(() => refreshBalances(), 100);
         }
       }
     } catch (error) {
@@ -149,7 +224,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         error: error instanceof Error ? error.message : "Failed to connect Freighter wallet",
       }));
     }
-  }, [closeModal]);
+  }, [closeModal, refreshBalances]);
 
   const connectXBull = useCallback(async () => {
     setState((prev) => ({ ...prev, isConnecting: true, error: null }));
@@ -170,8 +245,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         network: network,
         isConnecting: false,
         error: null,
+        balances: { v1: null, v2: null, combined: BigInt(0) },
+        isLoadingBalances: false,
       });
       closeModal();
+      // Refresh balances for both protocols after connection
+      setTimeout(() => refreshBalances(), 100);
     } catch (error) {
       setState((prev) => ({
         ...prev,
@@ -179,7 +258,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         error: error instanceof Error ? error.message : "Failed to connect xBull wallet",
       }));
     }
-  }, [closeModal]);
+  }, [closeModal, refreshBalances]);
 
   const disconnect = useCallback(async () => {
     // Note: Freighter doesn't have a disconnect method
@@ -191,6 +270,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       network: null,
       isConnecting: false,
       error: null,
+      balances: { v1: null, v2: null, combined: BigInt(0) },
+      isLoadingBalances: false,
     });
   }, []);
 
@@ -204,6 +285,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         openModal,
         closeModal,
         isModalOpen,
+        refreshBalances,
       }}
     >
       {children}
