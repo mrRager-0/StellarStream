@@ -24,6 +24,7 @@ import testRoutes from "./api/test.js";
 import { scheduleSnapshotMaintenance } from "./services/snapshot.scheduler.js";
 import { StaleStreamCleanupWorker } from "./stale-stream-cleanup.worker.js";
 import { DataIntegrityWorker } from "./data-integrity.worker.js";
+import { YieldAccrualWorker } from "./yield-accrual.worker.js";
 import { bigintSerializer } from "./middleware/bigintSerializer.js";
 import { swaggerSpec } from "./swagger.js";
 
@@ -46,6 +47,7 @@ const PORT = process.env.PORT ?? 3000;
 export const wsService = new WebSocketService(io);
 const cleanupWorker = new StaleStreamCleanupWorker();
 const dataIntegrityWorker = new DataIntegrityWorker();
+const yieldAccrualWorker = new YieldAccrualWorker();
 
 // ── Security middleware ────────────────────────────────────────────────────────
 app.use(
@@ -159,6 +161,7 @@ async function start(): Promise<void> {
   scheduleSnapshotMaintenance();
   cleanupWorker.start();
   dataIntegrityWorker.start();
+  yieldAccrualWorker.start();
 
   server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
@@ -171,6 +174,7 @@ function shutdown(signal: string): void {
   console.log(`${signal} received, shutting down gracefully...`);
   cleanupWorker.stop();
   dataIntegrityWorker.stop();
+  yieldAccrualWorker.stop();
   closeRedis()
     .then(() => prisma.$disconnect())
     .then(() => {

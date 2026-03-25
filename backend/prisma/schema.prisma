@@ -26,12 +26,19 @@ model Stream {
   legacy       Boolean      @default(false) // true = originated from V1 contract
   migrated     Boolean      @default(false) // true = V1 stream superseded by V2
   isPrivate    Boolean      @default(false)
+  yieldEnabled Boolean      @default(false)
+  vaultContractId String?
+  vaultShareBalance String?
+  vaultRatioScale String?
+  accruedInterest String    @default("0")
+  lastYieldAccrualAt DateTime?
   createdAt    DateTime     @default(now())
 
   @@index([sender])
   @@index([receiver])
   @@index([streamId])
   @@index([legacy])
+  @@index([yieldEnabled, status])
 }
 
 // Token prices for leaderboard volume calculations

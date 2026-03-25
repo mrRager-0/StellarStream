@@ -1855,6 +1855,12 @@ export namespace Prisma {
     legacy: boolean | null
     migrated: boolean | null
     isPrivate: boolean | null
+    yieldEnabled: boolean | null
+    vaultContractId: string | null
+    vaultShareBalance: string | null
+    vaultRatioScale: string | null
+    accruedInterest: string | null
+    lastYieldAccrualAt: Date | null
     createdAt: Date | null
   }
 
@@ -1872,6 +1878,12 @@ export namespace Prisma {
     legacy: boolean | null
     migrated: boolean | null
     isPrivate: boolean | null
+    yieldEnabled: boolean | null
+    vaultContractId: string | null
+    vaultShareBalance: string | null
+    vaultRatioScale: string | null
+    accruedInterest: string | null
+    lastYieldAccrualAt: Date | null
     createdAt: Date | null
   }
 
@@ -1889,6 +1901,12 @@ export namespace Prisma {
     legacy: number
     migrated: number
     isPrivate: number
+    yieldEnabled: number
+    vaultContractId: number
+    vaultShareBalance: number
+    vaultRatioScale: number
+    accruedInterest: number
+    lastYieldAccrualAt: number
     createdAt: number
     _all: number
   }
@@ -1916,6 +1934,12 @@ export namespace Prisma {
     legacy?: true
     migrated?: true
     isPrivate?: true
+    yieldEnabled?: true
+    vaultContractId?: true
+    vaultShareBalance?: true
+    vaultRatioScale?: true
+    accruedInterest?: true
+    lastYieldAccrualAt?: true
     createdAt?: true
   }
 
@@ -1933,6 +1957,12 @@ export namespace Prisma {
     legacy?: true
     migrated?: true
     isPrivate?: true
+    yieldEnabled?: true
+    vaultContractId?: true
+    vaultShareBalance?: true
+    vaultRatioScale?: true
+    accruedInterest?: true
+    lastYieldAccrualAt?: true
     createdAt?: true
   }
 
@@ -1950,6 +1980,12 @@ export namespace Prisma {
     legacy?: true
     migrated?: true
     isPrivate?: true
+    yieldEnabled?: true
+    vaultContractId?: true
+    vaultShareBalance?: true
+    vaultRatioScale?: true
+    accruedInterest?: true
+    lastYieldAccrualAt?: true
     createdAt?: true
     _all?: true
   }
@@ -2054,6 +2090,12 @@ export namespace Prisma {
     legacy: boolean
     migrated: boolean
     isPrivate: boolean
+    yieldEnabled: boolean
+    vaultContractId: string | null
+    vaultShareBalance: string | null
+    vaultRatioScale: string | null
+    accruedInterest: string
+    lastYieldAccrualAt: Date | null
     createdAt: Date
     _count: StreamCountAggregateOutputType | null
     _avg: StreamAvgAggregateOutputType | null
@@ -2090,6 +2132,12 @@ export namespace Prisma {
     legacy?: boolean
     migrated?: boolean
     isPrivate?: boolean
+    yieldEnabled?: boolean
+    vaultContractId?: boolean
+    vaultShareBalance?: boolean
+    vaultRatioScale?: boolean
+    accruedInterest?: boolean
+    lastYieldAccrualAt?: boolean
     createdAt?: boolean
   }, ExtArgs["result"]["stream"]>
 
@@ -2107,6 +2155,12 @@ export namespace Prisma {
     legacy?: boolean
     migrated?: boolean
     isPrivate?: boolean
+    yieldEnabled?: boolean
+    vaultContractId?: boolean
+    vaultShareBalance?: boolean
+    vaultRatioScale?: boolean
+    accruedInterest?: boolean
+    lastYieldAccrualAt?: boolean
     createdAt?: boolean
   }, ExtArgs["result"]["stream"]>
 
@@ -2124,6 +2178,12 @@ export namespace Prisma {
     legacy?: boolean
     migrated?: boolean
     isPrivate?: boolean
+    yieldEnabled?: boolean
+    vaultContractId?: boolean
+    vaultShareBalance?: boolean
+    vaultRatioScale?: boolean
+    accruedInterest?: boolean
+    lastYieldAccrualAt?: boolean
     createdAt?: boolean
   }
 
@@ -2145,6 +2205,12 @@ export namespace Prisma {
       legacy: boolean
       migrated: boolean
       isPrivate: boolean
+      yieldEnabled: boolean
+      vaultContractId: string | null
+      vaultShareBalance: string | null
+      vaultRatioScale: string | null
+      accruedInterest: string
+      lastYieldAccrualAt: Date | null
       createdAt: Date
     }, ExtArgs["result"]["stream"]>
     composites: {}
@@ -2552,6 +2618,12 @@ export namespace Prisma {
     readonly legacy: FieldRef<"Stream", 'Boolean'>
     readonly migrated: FieldRef<"Stream", 'Boolean'>
     readonly isPrivate: FieldRef<"Stream", 'Boolean'>
+    readonly yieldEnabled: FieldRef<"Stream", 'Boolean'>
+    readonly vaultContractId: FieldRef<"Stream", 'String'>
+    readonly vaultShareBalance: FieldRef<"Stream", 'String'>
+    readonly vaultRatioScale: FieldRef<"Stream", 'String'>
+    readonly accruedInterest: FieldRef<"Stream", 'String'>
+    readonly lastYieldAccrualAt: FieldRef<"Stream", 'DateTime'>
     readonly createdAt: FieldRef<"Stream", 'DateTime'>
   }
     
@@ -13263,6 +13335,12 @@ export namespace Prisma {
     legacy: 'legacy',
     migrated: 'migrated',
     isPrivate: 'isPrivate',
+    yieldEnabled: 'yieldEnabled',
+    vaultContractId: 'vaultContractId',
+    vaultShareBalance: 'vaultShareBalance',
+    vaultRatioScale: 'vaultRatioScale',
+    accruedInterest: 'accruedInterest',
+    lastYieldAccrualAt: 'lastYieldAccrualAt',
     createdAt: 'createdAt'
   };
 
@@ -13580,6 +13658,12 @@ export namespace Prisma {
     legacy?: BoolFilter<"Stream"> | boolean
     migrated?: BoolFilter<"Stream"> | boolean
     isPrivate?: BoolFilter<"Stream"> | boolean
+    yieldEnabled?: BoolFilter<"Stream"> | boolean
+    vaultContractId?: StringNullableFilter<"Stream"> | string | null
+    vaultShareBalance?: StringNullableFilter<"Stream"> | string | null
+    vaultRatioScale?: StringNullableFilter<"Stream"> | string | null
+    accruedInterest?: StringFilter<"Stream"> | string
+    lastYieldAccrualAt?: DateTimeNullableFilter<"Stream"> | Date | string | null
     createdAt?: DateTimeFilter<"Stream"> | Date | string
   }
 
@@ -13597,6 +13681,12 @@ export namespace Prisma {
     legacy?: SortOrder
     migrated?: SortOrder
     isPrivate?: SortOrder
+    yieldEnabled?: SortOrder
+    vaultContractId?: SortOrderInput | SortOrder
+    vaultShareBalance?: SortOrderInput | SortOrder
+    vaultRatioScale?: SortOrderInput | SortOrder
+    accruedInterest?: SortOrder
+    lastYieldAccrualAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
   }
 
@@ -13617,6 +13707,12 @@ export namespace Prisma {
     legacy?: BoolFilter<"Stream"> | boolean
     migrated?: BoolFilter<"Stream"> | boolean
     isPrivate?: BoolFilter<"Stream"> | boolean
+    yieldEnabled?: BoolFilter<"Stream"> | boolean
+    vaultContractId?: StringNullableFilter<"Stream"> | string | null
+    vaultShareBalance?: StringNullableFilter<"Stream"> | string | null
+    vaultRatioScale?: StringNullableFilter<"Stream"> | string | null
+    accruedInterest?: StringFilter<"Stream"> | string
+    lastYieldAccrualAt?: DateTimeNullableFilter<"Stream"> | Date | string | null
     createdAt?: DateTimeFilter<"Stream"> | Date | string
   }, "id" | "streamId" | "txHash">
 
@@ -13634,6 +13730,12 @@ export namespace Prisma {
     legacy?: SortOrder
     migrated?: SortOrder
     isPrivate?: SortOrder
+    yieldEnabled?: SortOrder
+    vaultContractId?: SortOrderInput | SortOrder
+    vaultShareBalance?: SortOrderInput | SortOrder
+    vaultRatioScale?: SortOrderInput | SortOrder
+    accruedInterest?: SortOrder
+    lastYieldAccrualAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     _count?: StreamCountOrderByAggregateInput
     _avg?: StreamAvgOrderByAggregateInput
@@ -13659,6 +13761,12 @@ export namespace Prisma {
     legacy?: BoolWithAggregatesFilter<"Stream"> | boolean
     migrated?: BoolWithAggregatesFilter<"Stream"> | boolean
     isPrivate?: BoolWithAggregatesFilter<"Stream"> | boolean
+    yieldEnabled?: BoolWithAggregatesFilter<"Stream"> | boolean
+    vaultContractId?: StringNullableWithAggregatesFilter<"Stream"> | string | null
+    vaultShareBalance?: StringNullableWithAggregatesFilter<"Stream"> | string | null
+    vaultRatioScale?: StringNullableWithAggregatesFilter<"Stream"> | string | null
+    accruedInterest?: StringWithAggregatesFilter<"Stream"> | string
+    lastYieldAccrualAt?: DateTimeNullableWithAggregatesFilter<"Stream"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"Stream"> | Date | string
   }
 
@@ -14447,6 +14555,12 @@ export namespace Prisma {
     legacy?: boolean
     migrated?: boolean
     isPrivate?: boolean
+    yieldEnabled?: boolean
+    vaultContractId?: string | null
+    vaultShareBalance?: string | null
+    vaultRatioScale?: string | null
+    accruedInterest?: string
+    lastYieldAccrualAt?: Date | string | null
     createdAt?: Date | string
   }
 
@@ -14464,6 +14578,12 @@ export namespace Prisma {
     legacy?: boolean
     migrated?: boolean
     isPrivate?: boolean
+    yieldEnabled?: boolean
+    vaultContractId?: string | null
+    vaultShareBalance?: string | null
+    vaultRatioScale?: string | null
+    accruedInterest?: string
+    lastYieldAccrualAt?: Date | string | null
     createdAt?: Date | string
   }
 
@@ -14481,6 +14601,12 @@ export namespace Prisma {
     legacy?: BoolFieldUpdateOperationsInput | boolean
     migrated?: BoolFieldUpdateOperationsInput | boolean
     isPrivate?: BoolFieldUpdateOperationsInput | boolean
+    yieldEnabled?: BoolFieldUpdateOperationsInput | boolean
+    vaultContractId?: NullableStringFieldUpdateOperationsInput | string | null
+    vaultShareBalance?: NullableStringFieldUpdateOperationsInput | string | null
+    vaultRatioScale?: NullableStringFieldUpdateOperationsInput | string | null
+    accruedInterest?: StringFieldUpdateOperationsInput | string
+    lastYieldAccrualAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -14498,6 +14624,12 @@ export namespace Prisma {
     legacy?: BoolFieldUpdateOperationsInput | boolean
     migrated?: BoolFieldUpdateOperationsInput | boolean
     isPrivate?: BoolFieldUpdateOperationsInput | boolean
+    yieldEnabled?: BoolFieldUpdateOperationsInput | boolean
+    vaultContractId?: NullableStringFieldUpdateOperationsInput | string | null
+    vaultShareBalance?: NullableStringFieldUpdateOperationsInput | string | null
+    vaultRatioScale?: NullableStringFieldUpdateOperationsInput | string | null
+    accruedInterest?: StringFieldUpdateOperationsInput | string
+    lastYieldAccrualAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -14515,6 +14647,12 @@ export namespace Prisma {
     legacy?: boolean
     migrated?: boolean
     isPrivate?: boolean
+    yieldEnabled?: boolean
+    vaultContractId?: string | null
+    vaultShareBalance?: string | null
+    vaultRatioScale?: string | null
+    accruedInterest?: string
+    lastYieldAccrualAt?: Date | string | null
     createdAt?: Date | string
   }
 
@@ -14532,6 +14670,12 @@ export namespace Prisma {
     legacy?: BoolFieldUpdateOperationsInput | boolean
     migrated?: BoolFieldUpdateOperationsInput | boolean
     isPrivate?: BoolFieldUpdateOperationsInput | boolean
+    yieldEnabled?: BoolFieldUpdateOperationsInput | boolean
+    vaultContractId?: NullableStringFieldUpdateOperationsInput | string | null
+    vaultShareBalance?: NullableStringFieldUpdateOperationsInput | string | null
+    vaultRatioScale?: NullableStringFieldUpdateOperationsInput | string | null
+    accruedInterest?: StringFieldUpdateOperationsInput | string
+    lastYieldAccrualAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -14549,6 +14693,12 @@ export namespace Prisma {
     legacy?: BoolFieldUpdateOperationsInput | boolean
     migrated?: BoolFieldUpdateOperationsInput | boolean
     isPrivate?: BoolFieldUpdateOperationsInput | boolean
+    yieldEnabled?: BoolFieldUpdateOperationsInput | boolean
+    vaultContractId?: NullableStringFieldUpdateOperationsInput | string | null
+    vaultShareBalance?: NullableStringFieldUpdateOperationsInput | string | null
+    vaultRatioScale?: NullableStringFieldUpdateOperationsInput | string | null
+    accruedInterest?: StringFieldUpdateOperationsInput | string
+    lastYieldAccrualAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -15473,6 +15623,17 @@ export namespace Prisma {
     not?: NestedBoolFilter<$PrismaModel> | boolean
   }
 
+  export type DateTimeNullableFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
+  }
+
   export type DateTimeFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -15503,6 +15664,12 @@ export namespace Prisma {
     legacy?: SortOrder
     migrated?: SortOrder
     isPrivate?: SortOrder
+    yieldEnabled?: SortOrder
+    vaultContractId?: SortOrder
+    vaultShareBalance?: SortOrder
+    vaultRatioScale?: SortOrder
+    accruedInterest?: SortOrder
+    lastYieldAccrualAt?: SortOrder
     createdAt?: SortOrder
   }
 
@@ -15524,6 +15691,12 @@ export namespace Prisma {
     legacy?: SortOrder
     migrated?: SortOrder
     isPrivate?: SortOrder
+    yieldEnabled?: SortOrder
+    vaultContractId?: SortOrder
+    vaultShareBalance?: SortOrder
+    vaultRatioScale?: SortOrder
+    accruedInterest?: SortOrder
+    lastYieldAccrualAt?: SortOrder
     createdAt?: SortOrder
   }
 
@@ -15541,6 +15714,12 @@ export namespace Prisma {
     legacy?: SortOrder
     migrated?: SortOrder
     isPrivate?: SortOrder
+    yieldEnabled?: SortOrder
+    vaultContractId?: SortOrder
+    vaultShareBalance?: SortOrder
+    vaultRatioScale?: SortOrder
+    accruedInterest?: SortOrder
+    lastYieldAccrualAt?: SortOrder
     createdAt?: SortOrder
   }
 
@@ -15616,6 +15795,20 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedBoolFilter<$PrismaModel>
     _max?: NestedBoolFilter<$PrismaModel>
+  }
+
+  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedDateTimeNullableFilter<$PrismaModel>
+    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type DateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -15997,17 +16190,6 @@ export namespace Prisma {
     amount?: SortOrder
   }
 
-  export type DateTimeNullableFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
-  }
-
   export type BridgeLogCountOrderByAggregateInput = {
     id?: SortOrder
     bridge?: SortOrder
@@ -16060,20 +16242,6 @@ export namespace Prisma {
     payload?: SortOrder
     landedAt?: SortOrder
     createdAt?: SortOrder
-  }
-
-  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedDateTimeNullableFilter<$PrismaModel>
-    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type ProposalCountOrderByAggregateInput = {
@@ -16273,6 +16441,10 @@ export namespace Prisma {
     set?: boolean
   }
 
+  export type NullableDateTimeFieldUpdateOperationsInput = {
+    set?: Date | string | null
+  }
+
   export type DateTimeFieldUpdateOperationsInput = {
     set?: Date | string
   }
@@ -16307,10 +16479,6 @@ export namespace Prisma {
     decrement?: bigint | number
     multiply?: bigint | number
     divide?: bigint | number
-  }
-
-  export type NullableDateTimeFieldUpdateOperationsInput = {
-    set?: Date | string | null
   }
 
   export type EnumNotificationPlatformFieldUpdateOperationsInput = {
@@ -16366,6 +16534,17 @@ export namespace Prisma {
   export type NestedBoolFilter<$PrismaModel = never> = {
     equals?: boolean | BooleanFieldRefInput<$PrismaModel>
     not?: NestedBoolFilter<$PrismaModel> | boolean
+  }
+
+  export type NestedDateTimeNullableFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
   }
 
   export type NestedDateTimeFilter<$PrismaModel = never> = {
@@ -16467,6 +16646,20 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedBoolFilter<$PrismaModel>
     _max?: NestedBoolFilter<$PrismaModel>
+  }
+
+  export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedDateTimeNullableFilter<$PrismaModel>
+    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type NestedDateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -16578,31 +16771,6 @@ export namespace Prisma {
     _sum?: NestedBigIntFilter<$PrismaModel>
     _min?: NestedBigIntFilter<$PrismaModel>
     _max?: NestedBigIntFilter<$PrismaModel>
-  }
-
-  export type NestedDateTimeNullableFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
-  }
-
-  export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedDateTimeNullableFilter<$PrismaModel>
-    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type NestedEnumNotificationPlatformFilter<$PrismaModel = never> = {

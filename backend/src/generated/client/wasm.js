@@ -136,6 +136,12 @@ exports.Prisma.StreamScalarFieldEnum = {
   legacy: 'legacy',
   migrated: 'migrated',
   isPrivate: 'isPrivate',
+  yieldEnabled: 'yieldEnabled',
+  vaultContractId: 'vaultContractId',
+  vaultShareBalance: 'vaultShareBalance',
+  vaultRatioScale: 'vaultRatioScale',
+  accruedInterest: 'accruedInterest',
+  lastYieldAccrualAt: 'lastYieldAccrualAt',
   createdAt: 'createdAt'
 };
 

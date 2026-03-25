@@ -48,3 +48,9 @@ export {
   type DataIntegrityMismatch,
   type DataIntegrityReport,
 } from "./data-integrity.service.js";
+
+export {
+  YieldAccrualService,
+  type YieldAccrualReport,
+  type YieldAccrualUpdate,
+} from "./yield-accrual.service.js";
