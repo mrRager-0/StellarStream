@@ -51,7 +51,10 @@ export default function VerifyPage() {
     setVerificationData(null);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
+      const apiUrl =
+        process.env.NEXT_PUBLIC_NEBULA_WARP_INDEXER_URL ||
+        process.env.NEXT_PUBLIC_API_URL ||
+        "http://localhost:3000/api/v1";
       const response = await fetch(`${apiUrl}/streams/verify/${streamId.trim()}`);
       const result = await response.json();
 

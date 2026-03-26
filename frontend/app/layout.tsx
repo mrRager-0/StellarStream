@@ -7,6 +7,7 @@ import { ToastProvider } from "@/components/toast-provider";
 import { WalletProvider } from "@/lib/wallet-context";
 import { ProtocolStatusProvider } from "@/lib/use-protocol-status";
 import { EmergencyBanner } from "@/components/emergency-banner";
+import ErrorTracker from "@/components/error-tracker";
 
 const lato = Lato({
   variable: "--font-lato",
