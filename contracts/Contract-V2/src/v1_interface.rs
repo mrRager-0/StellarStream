@@ -59,4 +59,5 @@ pub enum Error {
 pub trait V1Contract {
     fn get_stream(env: Env, stream_id: u64) -> Result<Stream, Error>;
     fn cancel(env: Env, stream_id: u64, caller: Address) -> Result<(), Error>;
+    fn cancel_stream(env: Env, stream_id: u64, caller: Address) -> Result<i128, Error>;
 }

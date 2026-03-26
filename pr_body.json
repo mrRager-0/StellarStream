@@ -1,6 +1,0 @@
-{
-  "title": "feat(frontend): Asset-Price Oracle Integration #455",
-  "body": "## feat(frontend): Asset-Price Oracle Integration #455\n\n### Overview\nThis PR implements #455 by integrating a real-time price oracle (CoinGecko) into the frontend. It allows users to view the USD value of their streams and assets with a smooth toggle between native units and USD, featuring a pulse animation on price updates.\n\n### Changes\n- `frontend/lib/price-service.ts`: Core service to fetch real-time prices from CoinGecko with 1-minute caching.\n- `frontend/lib/use-asset-price.ts`: Custom hook for polling asset prices and managing 'just updated' states.\n- `frontend/components/AssetPrice.tsx`: Reusable UI component with Native/USD toggle and pulse animations.\n- `frontend/components/streamingbalance/streamingbalance.tsx`: Integrated `useAssetPrice` hook and toggle logic into the Odometer display.\n- `frontend/components/xlm-balance-orb.tsx`: Integrated the `AssetPrice` component into the low-balance warning bubble.\n\n### Checklist\n- [x] Integrate price oracle API (CoinGecko)\n- [x] Animation: Show 'Price Updated' pulse when USD value shifts\n- [x] Allow users to toggle between 'Native Asset' and 'USD' views",
-  "head": "feature/asset-price-oracle",
-  "base": "main"
-}

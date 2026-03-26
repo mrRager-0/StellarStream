@@ -893,6 +893,43 @@ impl StellarStreamContract {
         Ok(())
     }
 
+    /// Optimized cancel for bridge migration.
+    /// Returns the total remaining balance (earned + unearned) and transfers it to the receiver.
+    pub fn cancel_stream(env: Env, stream_id: u64, caller: Address) -> Result<i128, Error> {
+        caller.require_auth();
+
+        let key = (STREAM_COUNT, stream_id);
+        let mut stream: Stream = env
+            .storage()
+            .instance()
+            .get(&key)
+            .ok_or(Error::StreamNotFound)?;
+
+        if stream.receiver != caller {
+            return Err(Error::Unauthorized);
+        }
+        if stream.cancelled {
+            return Err(Error::AlreadyCancelled);
+        }
+
+        let remaining = stream.total_amount - stream.withdrawn_amount;
+
+        stream.cancelled = true;
+        stream.withdrawn_amount = stream.total_amount;
+        env.storage().instance().set(&key, &stream);
+
+        if remaining > 0 {
+            let token_client = token::Client::new(&env, &stream.token);
+            token_client.transfer(
+                &env.current_contract_address(),
+                &stream.receiver,
+                &remaining,
+            );
+        }
+
+        Ok(remaining)
+    }
+
     fn calculate_unlocked(stream: &Stream, current_time: u64) -> i128 {
         if current_time <= stream.start_time {
             return 0;
