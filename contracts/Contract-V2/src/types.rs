@@ -493,3 +493,132 @@ pub struct DexPoolInfo {
     /// Pool fee in basis points (e.g., 30 = 0.3% fee)
     pub fee_bps: u32,
 }
+
+// ----------------------------------------------------------------
+// Issue #377 — Push-Pull Rate Re-balancing
+// ----------------------------------------------------------------
+
+/// Represents a pending rate update proposal for a stream.
+/// This is stored temporarily with a 7-day TTL.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct PendingRateUpdate {
+    /// The new proposed rate (amount per second)
+    pub new_rate: i128,
+    /// Unix timestamp when the proposal was created
+    pub proposed_at: u64,
+    /// Address that proposed the change (always the sender)
+    pub proposed_by: Address,
+    /// Original end time before the change
+    pub original_end_time: u64,
+    /// Original total amount before the change
+    pub original_total_amount: i128,
+}
+
+/// Event emitted when a rate update is proposed
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct RateUpdateProposedEvent {
+    pub stream_id: u64,
+    pub proposed_by: Address,
+    pub current_rate: i128,
+    pub new_rate: i128,
+    pub new_end_time: u64,
+    pub expires_at: u64,
+    pub timestamp: u64,
+}
+
+/// Event emitted when a rate update is accepted
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct RateUpdateAcceptedEvent {
+    pub stream_id: u64,
+    pub accepted_by: Address,
+    pub new_rate: i128,
+    pub new_end_time: u64,
+    pub remaining_balance: i128,
+    pub timestamp: u64,
+}
+
+/// Event emitted when a rate update proposal is cancelled
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct RateUpdateCancelledEvent {
+    pub stream_id: u64,
+    pub cancelled_by: Address,
+    pub reason: u32, // 0 = expired, 1 = manually cancelled
+    pub timestamp: u64,
+}
+
+// ----------------------------------------------------------------
+// Issue #409 — Pre-Flight Simulation Helper
+// ----------------------------------------------------------------
+
+/// Result of a stream creation simulation.
+/// This is a read-only dry-run that checks if stream creation would succeed.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct SimulationResult {
+    /// Whether the stream creation would succeed
+    pub success: bool,
+    /// Estimated storage footprint in bytes
+    pub estimated_footprint_bytes: u32,
+    /// Estimated RAM usage in bytes
+    pub estimated_ram_bytes: u32,
+    /// Error code if simulation failed (0 = success)
+    pub error_code: u32,
+    /// Human-readable error message if simulation failed
+    pub error_message: String,
+    /// Current sender balance
+    pub sender_balance: i128,
+    /// Required balance (including protocol fee)
+    pub required_balance: i128,
+    /// Whether the sender has sufficient balance
+    pub has_sufficient_balance: bool,
+    /// Estimated protocol fee
+    pub estimated_protocol_fee: i128,
+}
+
+/// Detailed simulation report with all checks
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct SimulationReport {
+    /// Overall success status
+    pub would_succeed: bool,
+    /// Balance check result
+    pub balance_check: SimulationCheck,
+    /// Storage check result
+    pub storage_check: SimulationCheck,
+    /// Parameter validation result
+    pub params_check: SimulationCheck,
+    /// Ledger footprint estimate
+    pub footprint: LedgerFootprint,
+}
+
+/// Individual simulation check result
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct SimulationCheck {
+    /// Whether this check passed
+    pub passed: bool,
+    /// Error code if failed
+    pub error_code: u32,
+    /// Error message if failed
+    pub error_message: String,
+}
+
+/// Estimated ledger footprint for a stream
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct LedgerFootprint {
+    /// Instance storage bytes
+    pub instance_bytes: u32,
+    /// Persistent storage bytes
+    pub persistent_bytes: u32,
+    /// Estimated read operations
+    pub estimated_reads: u32,
+    /// Estimated write operations
+    pub estimated_writes: u32,
+    /// Estimated emit events size
+    pub event_bytes: u32,
+}

@@ -18,6 +18,9 @@ import {
   ShieldAlert,
   Menu,
   X,
+  Rocket,
+  Coins,
+  FileText,
 } from "lucide-react";
 import { TransactionQueueManager } from "@/components/dashboard/TransactionQueueManager";
 
@@ -102,6 +105,21 @@ export function Sidebar({ onOpenAuditLog }: SidebarProps) {
       label: "Security Vault",
       href: "/dashboard/security-vault",
       icon: ShieldAlert,
+    },
+    {
+      label: "Emergency Stop",
+      href: "/dashboard/emergency-stop",
+      icon: ShieldAlert,
+    },
+    {
+      label: "Deploy Splitter",
+      href: "/dashboard/deploy-splitter",
+      icon: Rocket,
+    },
+    {
+      label: "Dust Recovery",
+      href: "/dashboard/dust-recovery",
+      icon: Coins,
     },
   ];
 
