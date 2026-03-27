@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use crate::types::{PermitArgs, StreamArgs};
+use crate::types::{PermitArgs, StreamArgs, SwapStreamArgs};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token::TokenClient,
@@ -2616,4 +2616,339 @@ fn test_set_fee_bps_respects_cap() {
     
     // Still at 500
     assert_eq!(v2_client.get_fee_bps(), 500);
+}
+
+// ----------------------------------------------------------------
+// Issue #378 — Streaming Swap (DEX Integration) Tests
+// ----------------------------------------------------------------
+
+/// Mock DEX contract for testing swap streaming
+#[contract]
+pub struct MockDex;
+
+#[contractimpl]
+impl MockDex {
+    /// Simulate swap - returns amount_out = amount_in * 2 (1:2 ratio for testing)
+    pub fn swap(
+        env: Env,
+        token_in: Address,
+        token_out: Address,
+        amount_in: i128,
+        min_amount_out: i128,
+        _deadline: u64,
+    ) -> i128 {
+        // Simple 1:2 swap ratio for testing
+        let amount_out = amount_in * 2;
+        if amount_out < min_amount_out {
+            env.panic_with_error(1); // SwapFailed error
+        }
+        amount_out
+    }
+
+    pub fn get_amount_out(
+        env: Env,
+        _token_in: Address,
+        _token_out: Address,
+        amount_in: i128,
+    ) -> i128 {
+        // 1:2 swap ratio
+        amount_in * 2
+    }
+
+    pub fn get_spot_price(env: Env, _token_in: Address, _token_out: Address) -> i128 {
+        // 1:2 spot price
+        2_000_000_0 // 2.0 with 7 decimals
+    }
+}
+
+#[test]
+fn test_swap_stream_fails_when_swap_disabled() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let (token_id, _token_client, _asset_client) = create_token(&env, &admin);
+    let (_, v2_client) = setup_v2(&env, &admin);
+
+    // Whitelist the asset
+    v2_client.add_to_whitelist(&token_id);
+
+    let sender = Address::generate(&env);
+    let receiver = Address::generate(&env);
+    let now = env.ledger().timestamp();
+
+    let args = SwapStreamArgs {
+        sender: sender.clone(),
+        receiver: receiver.clone(),
+        amount_in: 100_000_000,
+        asset_in: token_id.clone(),
+        asset_out: token_id.clone(), // Same asset (will fail)
+        min_amount_out: 100_000_000,
+        slippage_tolerance_bps: 50,
+        swap_deadline: now + 3600,
+        start_time: now,
+        end_time: now + 100,
+        cliff_time: now,
+        vault_address: None,
+        yield_enabled: false,
+        yield_recipient: 1,
+        split_address: None,
+        split_bps: 0,
+        cancellation_type: 0,
+    };
+
+    // Swap is disabled by default - should fail
+    let result = v2_client.try_create_swap_stream(&args);
+    assert_eq!(result, Err(Ok(Error::DexNotConfigured)));
+}
+
+#[test]
+fn test_swap_stream_fails_with_same_asset() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let (token_id, _token_client, _asset_client) = create_token(&env, &admin);
+    let (_, v2_client) = setup_v2(&env, &admin);
+
+    // Whitelist the asset
+    v2_client.add_to_whitelist(&token_id);
+
+    // Enable swap
+    v2_client.set_swap_enabled(&true);
+
+    let sender = Address::generate(&env);
+    let receiver = Address::generate(&env);
+    let now = env.ledger().timestamp();
+
+    let args = SwapStreamArgs {
+        sender: sender.clone(),
+        receiver: receiver.clone(),
+        amount_in: 100_000_000,
+        asset_in: token_id.clone(),
+        asset_out: token_id.clone(), // Same asset
+        min_amount_out: 100_000_000,
+        slippage_tolerance_bps: 50,
+        swap_deadline: now + 3600,
+        start_time: now,
+        end_time: now + 100,
+        cliff_time: now,
+        vault_address: None,
+        yield_enabled: false,
+        yield_recipient: 1,
+        split_address: None,
+        split_bps: 0,
+        cancellation_type: 0,
+    };
+
+    // Same asset should fail
+    let result = v2_client.try_create_swap_stream(&args);
+    assert_eq!(result, Err(Ok(Error::SameAsset)));
+}
+
+#[test]
+fn test_swap_stream_fails_with_invalid_slippage() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+
+    let (token_in_id, _token_in_client, asset_in_client) = create_token(&env, &token_admin);
+    let (token_out_id, _token_out_client, _asset_out_client) = create_token(&env, &token_admin);
+
+    let (_, v2_client) = setup_v2(&env, &admin);
+
+    // Whitelist both assets
+    v2_client.add_to_whitelist(&token_in_id);
+    v2_client.add_to_whitelist(&token_out_id);
+
+    // Enable swap
+    v2_client.set_swap_enabled(&true);
+
+    let sender = Address::generate(&env);
+    let receiver = Address::generate(&env);
+    let now = env.ledger().timestamp();
+
+    let args = SwapStreamArgs {
+        sender: sender.clone(),
+        receiver: receiver.clone(),
+        amount_in: 100_000_000,
+        asset_in: token_in_id,
+        asset_out: token_out_id,
+        min_amount_out: 100_000_000,
+        slippage_tolerance_bps: 15_000, // > 100% = invalid
+        swap_deadline: now + 3600,
+        start_time: now,
+        end_time: now + 100,
+        cliff_time: now,
+        vault_address: None,
+        yield_enabled: false,
+        yield_recipient: 1,
+        split_address: None,
+        split_bps: 0,
+        cancellation_type: 0,
+    };
+
+    // Invalid slippage tolerance should fail
+    let result = v2_client.try_create_swap_stream(&args);
+    assert_eq!(result, Err(Ok(Error::InvalidSlippageTolerance)));
+}
+
+#[test]
+fn test_swap_stream_fails_with_expired_deadline() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+
+    let (token_in_id, _token_in_client, _asset_in_client) = create_token(&env, &token_admin);
+    let (token_out_id, _token_out_client, _asset_out_client) = create_token(&env, &token_admin);
+
+    let (_, v2_client) = setup_v2(&env, &admin);
+
+    // Whitelist both assets
+    v2_client.add_to_whitelist(&token_in_id);
+    v2_client.add_to_whitelist(&token_out_id);
+
+    // Enable swap
+    v2_client.set_swap_enabled(&true);
+
+    let sender = Address::generate(&env);
+    let receiver = Address::generate(&env);
+    let now = env.ledger().timestamp();
+
+    let args = SwapStreamArgs {
+        sender: sender.clone(),
+        receiver: receiver.clone(),
+        amount_in: 100_000_000,
+        asset_in: token_in_id,
+        asset_out: token_out_id,
+        min_amount_out: 100_000_000,
+        slippage_tolerance_bps: 50,
+        swap_deadline: now - 1, // Expired deadline
+        start_time: now,
+        end_time: now + 100,
+        cliff_time: now,
+        vault_address: None,
+        yield_enabled: false,
+        yield_recipient: 1,
+        split_address: None,
+        split_bps: 0,
+        cancellation_type: 0,
+    };
+
+    // Expired deadline should fail
+    let result = v2_client.try_create_swap_stream(&args);
+    assert_eq!(result, Err(Ok(Error::ExpiredDeadline)));
+}
+
+#[test]
+fn test_admin_can_configure_dex_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let (_, v2_client) = setup_v2(&env, &admin);
+
+    // Initially no DEX configured
+    assert!(v2_client.get_dex_address().is_none());
+
+    // Set DEX address
+    let dex_address = Address::generate(&env);
+    v2_client.set_dex_address(&dex_address);
+
+    // Verify configured
+    assert_eq!(v2_client.get_dex_address(), Some(dex_address));
+}
+
+#[test]
+fn test_admin_can_enable_disable_swap() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let (_, v2_client) = setup_v2(&env, &admin);
+
+    // Initially disabled
+    assert!(!v2_client.is_swap_enabled());
+
+    // Enable swap
+    v2_client.set_swap_enabled(&true);
+    assert!(v2_client.is_swap_enabled());
+
+    // Disable swap
+    v2_client.set_swap_enabled(&false);
+    assert!(!v2_client.is_swap_enabled());
+}
+
+#[test]
+fn test_get_swap_quote_returns_amount() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+
+    let (token_in_id, _token_in_client, _asset_in_client) = create_token(&env, &token_admin);
+    let (token_out_id, _token_out_client, _asset_out_client) = create_token(&env, &token_admin);
+
+    let (_, v2_client) = setup_v2(&env, &admin);
+
+    // Set DEX address
+    let dex_address = Address::generate(&env);
+    v2_client.set_dex_address(&dex_address);
+
+    // Enable swap
+    v2_client.set_swap_enabled(&true);
+
+    // Get swap quote (mock DEX will return 2x amount)
+    let result = v2_client.get_swap_quote(&100_000_000, &token_in_id, &token_out_id);
+    
+    // Mock DEX returns amount_out = amount_in * 2
+    assert_eq!(result.amount_in, 100_000_000);
+    assert_eq!(result.amount_out, 200_000_000);
+}
+
+#[test]
+fn test_get_swap_quote_fails_when_swap_disabled() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+
+    let (token_in_id, _token_in_client, _asset_in_client) = create_token(&env, &token_admin);
+    let (token_out_id, _token_out_client, _asset_out_client) = create_token(&env, &token_admin);
+
+    let (_, v2_client) = setup_v2(&env, &admin);
+
+    // Swap disabled by default
+    let result = v2_client.try_get_swap_quote(&100_000_000, &token_in_id, &token_out_id);
+    assert_eq!(result, Err(Ok(Error::DexNotConfigured)));
+}
+
+#[test]
+fn test_get_swap_quote_fails_with_same_asset() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+
+    let (token_id, _token_client, _asset_client) = create_token(&env, &token_admin);
+
+    let (_, v2_client) = setup_v2(&env, &admin);
+
+    // Set DEX address
+    let dex_address = Address::generate(&env);
+    v2_client.set_dex_address(&dex_address);
+
+    // Enable swap
+    v2_client.set_swap_enabled(&true);
+
+    // Same asset should fail
+    let result = v2_client.try_get_swap_quote(&100_000_000, &token_id, &token_id);
+    assert_eq!(result, Err(Ok(Error::SameAsset)));
 }

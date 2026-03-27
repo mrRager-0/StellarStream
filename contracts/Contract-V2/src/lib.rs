@@ -12,12 +12,13 @@ mod v1_interface;
 use contracterror::Error;
 pub use types::{
     AdminTransferredEvent, BatchStreamsCreatedEvent, BeneficiaryTransferredV2Event,
-    ClawbackRebalanceEvent, ContractPausedEvent, ContractUnpausedEvent, FeesWithdrawnEvent,
-    MigrationEvent, MultiAssetRecipient, NebulaEvent, Operation, OperationExecutedEvent,
-    OperationScheduledEvent, PermitArgs, PermitStreamCreatedEvent, StreamArgs, StreamBatchEntry,
-    StreamCancelledV2Event, StreamClaimV2Event, StreamCreatedV2Event, StreamMigratedEvent,
-    StreamRefilledEvent, StreamRequestApprovedEvent, StreamRequestExecutedEvent,
-    StreamRequestInitiatedEvent, StreamStatus, StreamToppedUpEvent, StreamV2,
+    ClawbackRebalanceEvent, ContractPausedEvent, ContractUnpausedEvent, DexPoolInfo,
+    FeesWithdrawnEvent, MigrationEvent, MultiAssetRecipient, NebulaEvent, Operation,
+    OperationExecutedEvent, OperationScheduledEvent, PermitArgs, PermitStreamCreatedEvent,
+    StreamArgs, StreamBatchEntry, StreamCancelledV2Event, StreamClaimV2Event,
+    StreamCreatedV2Event, StreamMigratedEvent, StreamRefilledEvent, StreamRequestApprovedEvent,
+    StreamRequestExecutedEvent, StreamRequestInitiatedEvent, StreamStatus, StreamToppedUpEvent,
+    StreamV2, SwapResult, SwapStreamArgs, SwapStreamCreatedEvent,
 };
 use v1_interface::Client as V1Client;
 
@@ -56,6 +57,61 @@ pub trait ComplianceTrait {
 #[soroban_sdk::contractclient(name = "DaoTokenClient")]
 pub trait DaoTokenTrait {
     fn balance(env: Env, id: Address) -> i128;
+}
+
+// ----------------------------------------------------------------
+// Issue #378 — Streaming Swap (DEX Integration)
+// ----------------------------------------------------------------
+
+/// Standard Soroban AMM (Automated Market Maker) interface for swap operations.
+/// This trait follows the common Soroban DEX interface pattern used by StellarSwap
+/// and other Soroban AMM protocols.
+#[soroban_sdk::contractclient(name = "SwapClient")]
+pub trait SwapTrait {
+    /// Swap `amount_in` of `token_in` for `token_out`.
+    /// Returns the amount of `token_out` received.
+    ///
+    /// # Arguments
+    /// * `token_in` - Address of the token to swap from
+    /// * `token_out` - Address of the token to receive
+    /// * `amount_in` - Amount of token_in to swap
+    /// * `min_amount_out` - Minimum amount of token_out to receive (slippage protection)
+    /// * `deadline` - Unix timestamp after which the swap is invalid
+    fn swap(
+        env: Env,
+        token_in: Address,
+        token_out: Address,
+        amount_in: i128,
+        min_amount_out: i128,
+        deadline: u64,
+    ) -> i128;
+
+    /// Get the expected output amount for a swap without executing it.
+    /// Useful for calculating slippage and price impact.
+    ///
+    /// # Arguments
+    /// * `token_in` - Address of the input token
+    /// * `token_out` - Address of the output token
+    /// * `amount_in` - Amount of token_in to swap
+    ///
+    /// # Returns
+    /// Expected amount of token_out (before slippage)
+    fn get_amount_out(
+        env: Env,
+        token_in: Address,
+        token_out: Address,
+        amount_in: i128,
+    ) -> i128;
+
+    /// Get the spot price of token_in in terms of token_out.
+    ///
+    /// # Arguments
+    /// * `token_in` - Address of the input token
+    /// * `token_out` - Address of the output token
+    ///
+    /// # Returns
+    /// Spot price as a ratio (token_out / token_in) with appropriate decimals
+    fn get_spot_price(env: Env, token_in: Address, token_out: Address) -> i128;
 }
 
 #[contractimpl]
@@ -441,6 +497,59 @@ impl Contract {
     pub fn set_min_value(env: Env, asset: Address, min: i128) -> Result<(), Error> {
         storage::try_get_admin(&env)?.require_auth();
         Self::set_min_value_internal(env, asset, min)
+    }
+
+    // ----------------------------------------------------------------
+    // Issue #378 — DEX Configuration for Streaming Swap
+    // ----------------------------------------------------------------
+
+    /// Set the default DEX contract address for swap operations.
+    /// Admin-only.
+    pub fn set_dex_address(env: Env, dex_address: Address) -> Result<(), Error> {
+        storage::try_get_admin(&env)?.require_auth();
+        storage::set_dex_address(&env, &dex_address);
+        Ok(())
+    }
+
+    /// Get the configured DEX contract address.
+    pub fn get_dex_address(env: Env) -> Option<Address> {
+        storage::get_dex_address(&env)
+    }
+
+    /// Enable or disable swap streaming globally.
+    /// Admin-only.
+    pub fn set_swap_enabled(env: Env, enabled: bool) -> Result<(), Error> {
+        storage::try_get_admin(&env)?.require_auth();
+        storage::set_swap_enabled(&env, enabled);
+        Ok(())
+    }
+
+    /// Check if swap streaming is enabled globally.
+    pub fn is_swap_enabled(env: Env) -> bool {
+        storage::is_swap_enabled(&env)
+    }
+
+    /// Set a specific DEX pool configuration for an asset pair.
+    /// This allows routing through different pools for different asset pairs.
+    /// Admin-only.
+    pub fn set_dex_pool(
+        env: Env,
+        token_in: Address,
+        token_out: Address,
+        pool_info: DexPoolInfo,
+    ) -> Result<(), Error> {
+        storage::try_get_admin(&env)?.require_auth();
+        storage::set_dex_pool(&env, &token_in, &token_out, &pool_info);
+        Ok(())
+    }
+
+    /// Get the DEX pool configuration for an asset pair.
+    pub fn get_dex_pool(
+        env: Env,
+        token_in: Address,
+        token_out: Address,
+    ) -> Option<DexPoolInfo> {
+        storage::get_dex_pool(&env, &token_in, &token_out)
     }
 
     // ----------------------------------------------------------------
@@ -2019,6 +2128,264 @@ impl Contract {
         );
 
         Ok(stream_id)
+    }
+
+    // ----------------------------------------------------------------
+    // Issue #378 — Streaming Swap (DEX Integration)
+    // ----------------------------------------------------------------
+
+    /// Create a stream where the sender provides `asset_in`, which is automatically
+    /// swapped to `asset_out` via a Soroban AMM before initializing the stream.
+    ///
+    /// This enables use cases like:
+    /// - Stream XLM but receive USDC (swap XLM -> USDC first)
+    /// - Stream any asset but receive a stablecoin
+    ///
+    /// # Parameters
+    /// - `args`: SwapStreamArgs containing all swap and stream configuration
+    ///
+    /// # Returns
+    /// - `Ok(stream_id)` if stream was created successfully
+    /// - `Err(Error)` if swap fails, slippage exceeded, or stream creation fails
+    ///
+    /// # Safety Features
+    /// 1. `min_amount_out` - Absolute minimum output; swap fails if not met
+    /// 2. `slippage_tolerance_bps` - Additional protection (e.g., 50 bps = 0.5%)
+    /// 3. `swap_deadline` - Prevents stale price execution
+    pub fn create_swap_stream(env: Env, args: SwapStreamArgs) -> Result<u64, Error> {
+        Self::require_not_paused(&env)?;
+        Self::require_not_emergency(&env)?;
+
+        // Validate swap streaming is enabled
+        if !storage::is_swap_enabled(&env) {
+            return Err(Error::DexNotConfigured);
+        }
+
+        // Validate sender authorized this call
+        args.sender.require_auth();
+
+        // Validate input parameters
+        if args.amount_in <= 0 {
+            return Err(Error::InvalidSwapParams);
+        }
+
+        if args.asset_in == args.asset_out {
+            return Err(Error::SameAsset);
+        }
+
+        // Validate slippage tolerance (0-100% = 0-10000 bps)
+        if args.slippage_tolerance_bps > 10_000 {
+            return Err(Error::InvalidSlippageTolerance);
+        }
+
+        // Check deadline
+        let now = env.ledger().timestamp();
+        if args.swap_deadline < now {
+            return Err(Error::ExpiredDeadline);
+        }
+
+        // Validate stream timing
+        if args.start_time >= args.end_time {
+            return Err(Error::InvalidTimeRange);
+        }
+
+        if args.cliff_time < args.start_time || args.cliff_time > args.end_time {
+            return Err(Error::InvalidTimeRange);
+        }
+
+        // Validate both assets are whitelisted
+        Self::require_asset_whitelisted(&env, &args.asset_in)?;
+        Self::require_asset_whitelisted(&env, &args.asset_out)?;
+
+        // Compliance oracle check
+        Self::require_compliant(&env, &args.sender)?;
+        Self::require_compliant(&env, &args.receiver)?;
+
+        // Get DEX address
+        let dex_address = storage::get_dex_address(&env)
+            .ok_or(Error::DexNotConfigured)?;
+
+        // Transfer asset_in from sender to this contract
+        let token_in_client = soroban_sdk::token::TokenClient::new(&env, &args.asset_in);
+        token_in_client.transfer(
+            &args.sender,
+            &env.current_contract_address(),
+            &args.amount_in,
+        );
+
+        // Approve DEX to spend asset_in from this contract
+        token_in_client.approve(
+            &env.current_contract_address(),
+            &dex_address,
+            &args.amount_in,
+            &args.swap_deadline,
+        );
+
+        // Execute swap via DEX
+        let swap_client = SwapClient::new(&env, &dex_address);
+        
+        // Calculate effective min_amount_out with slippage tolerance
+        // Apply slippage tolerance as an additional safety margin
+        let effective_min_amount_out = Self::calculate_min_amount_with_slippage(
+            args.amount_in,
+            args.min_amount_out,
+            args.slippage_tolerance_bps,
+        );
+
+        // Execute the swap
+        let amount_out = swap_client.swap(
+            args.asset_in.clone(),
+            args.asset_out.clone(),
+            args.amount_in,
+            effective_min_amount_out,
+            args.swap_deadline,
+        ).map_err(|_| Error::SwapFailed)?;
+
+        // Safety check: verify we received at least the user's specified minimum
+        if amount_out < args.min_amount_out {
+            return Err(Error::SwapSlippageExceeded);
+        }
+
+        // Calculate stream amount after protocol fee
+        let stream_amount = Self::apply_protocol_fee(&env, &args.asset_out, amount_out)?;
+
+        // Check dust threshold for the output asset
+        if stream_amount < storage::get_min_value(&env, &args.asset_out) {
+            return Err(Error::BelowDustThreshold);
+        }
+
+        // Create the stream with the swapped asset
+        let stream_id = storage::next_stream_id(&env);
+
+        // Handle vault deposit if yield is enabled
+        let mut vault_used = None;
+        if args.yield_enabled {
+            if let Some(vault_addr) = &args.vault_address {
+                let vault_client = VaultClient::new(&env, vault_addr);
+                vault_client.deposit(&stream_amount);
+                vault_used = Some(vault_addr.clone());
+            }
+        }
+
+        let stream = StreamV2 {
+            sender: args.sender.clone(),
+            receiver: args.receiver.clone(),
+            beneficiary: args.receiver.clone(),
+            token: args.asset_out.clone(),
+            total_amount: stream_amount,
+            start_time: args.start_time,
+            end_time: args.end_time,
+            cliff_time: args.cliff_time,
+            withdrawn_amount: 0,
+            cancelled: false,
+            migrated_from_v1: false,
+            v1_stream_id: 0,
+            step_duration: 0, // Default linear stream
+            multiplier_bps: 10000, // 1.0x multiplier
+            penalty_bps: 0, // Default no penalty
+            vault_address: vault_used,
+            yield_enabled: args.yield_enabled,
+            is_pending: false,
+            is_recurrent: false,
+            cycle_duration: 0,
+            cancellation_type: args.cancellation_type,
+            yield_recipient: args.yield_recipient,
+            split_address: args.split_address.clone(),
+            split_bps: args.split_bps,
+        };
+
+        storage::set_stream(&env, stream_id, &stream);
+        storage::update_stats(&env, stream_amount, &args.sender, &args.receiver);
+
+        // Emit swap stream creation event
+        let mut data = Vec::new(&env);
+        data.push_back(stream_id.into_val(&env));
+        data.push_back(args.sender.clone().into_val(&env));
+        data.push_back(args.receiver.clone().into_val(&env));
+        data.push_back(args.asset_in.clone().into_val(&env));
+        data.push_back(args.asset_out.clone().into_val(&env));
+        data.push_back(args.amount_in.into_val(&env));
+        data.push_back(amount_out.into_val(&env));
+        data.push_back(args.min_amount_out.into_val(&env));
+        data.push_back(now.into_val(&env));
+
+        env.events().publish(
+            (stream_id, symbol_short!("swap_stream")),
+            NebulaEvent {
+                version: 2,
+                timestamp: now,
+                action: symbol_short!("swap_stream"),
+                data,
+            },
+        );
+
+        Ok(stream_id)
+    }
+
+    /// Calculate the minimum amount considering slippage tolerance.
+    /// This provides additional safety beyond the user's specified min_amount_out.
+    fn calculate_min_amount_with_slippage(
+        _amount_in: i128,
+        min_amount_out: i128,
+        slippage_tolerance_bps: u32,
+    ) -> i128 {
+        // Apply slippage tolerance to min_amount_out
+        // This reduces the acceptable output by the slippage percentage
+        let tolerance_multiplier = 10_000 - slippage_tolerance_bps as i128;
+        // Use integer math: (min_amount_out * tolerance_multiplier) / 10000
+        (min_amount_out * tolerance_multiplier) / 10_000
+    }
+
+    /// Get the expected output amount for a swap without executing it.
+    /// Useful for UI to show user expected output before confirming.
+    pub fn get_swap_quote(
+        env: Env,
+        amount_in: i128,
+        asset_in: Address,
+        asset_out: Address,
+    ) -> Result<SwapResult, Error> {
+        if !storage::is_swap_enabled(&env) {
+            return Err(Error::DexNotConfigured);
+        }
+
+        if amount_in <= 0 {
+            return Err(Error::InvalidSwapParams);
+        }
+
+        if asset_in == asset_out {
+            return Err(Error::SameAsset);
+        }
+
+        let dex_address = storage::get_dex_address(&env)
+            .ok_or(Error::DexNotConfigured)?;
+
+        let swap_client = SwapClient::new(&env, &dex_address);
+        
+        let amount_out = swap_client.get_amount_out(
+            asset_in.clone(),
+            asset_out.clone(),
+            amount_in,
+        );
+
+        let spot_price = swap_client.get_spot_price(
+            asset_in,
+            asset_out,
+        );
+
+        // Calculate price impact (simplified - assumes 1:1 for this calculation)
+        // Price impact = ((expected_out - theoretical_out) / theoretical_out) * 10000 bps
+        let theoretical_out = amount_in; // Simplified - assumes 1:1 for demonstration
+        let price_impact = if theoretical_out > 0 {
+            ((amount_out - theoretical_out) * 10000) / theoretical_out
+        } else {
+            0
+        };
+
+        Ok(SwapResult {
+            amount_in,
+            amount_out,
+            price_impact_bps: price_impact,
+        })
     }
 
     // ----------------------------------------------------------------

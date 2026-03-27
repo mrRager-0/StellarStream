@@ -77,4 +77,16 @@ pub enum Error {
     StreamNotFullyWithdrawn = 49,
     /// Fee exceeds protocol maximum (protects users from excessive admin-set fees)
     FeeTooHigh = 50,
+    /// DEX contract address not configured for swap operations
+    DexNotConfigured = 51,
+    /// Swap failed - output amount below minimum slippage tolerance
+    SwapSlippageExceeded = 52,
+    /// Invalid swap parameters (e.g., zero amount or invalid deadline)
+    InvalidSwapParams = 53,
+    /// Swap execution failed in DEX
+    SwapFailed = 54,
+    /// Source and destination assets are the same
+    SameAsset = 55,
+    /// Invalid slippage tolerance (must be between 0 and 10000 bps = 100%)
+    InvalidSlippageTolerance = 56,
 }

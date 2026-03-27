@@ -125,6 +125,14 @@ pub enum DataKeyV2 {
     // -- Issue #603 — Reentrancy Guard --------------------------------
     /// Set to true while split_multi_asset is executing; prevents reentrant calls
     Locked, // 24
+
+    // -- Issue #378 — Streaming Swap (DEX Integration) -----------------
+    /// Default DEX contract address for swap operations
+    DexAddress, // 25
+    /// DEX pool configuration for a specific asset pair (token_in, token_out)
+    DexPool(Address, Address), // 26
+    /// Whether swap streaming is enabled globally
+    SwapEnabled, // 27
 }
 
 /// Global stream counter.
@@ -765,4 +773,65 @@ pub fn acquire_lock(env: &Env) -> Result<(), crate::contracterror::Error> {
 /// Release the reentrancy lock.
 pub fn release_lock(env: &Env) {
     env.storage().instance().remove(&DataKeyV2::Locked);
+}
+
+// ----------------------------------------------------------------
+// Issue #378 — Streaming Swap (DEX Integration)
+// ----------------------------------------------------------------
+
+use crate::types::DexPoolInfo;
+
+/// Set the default DEX contract address for swap operations.
+pub fn set_dex_address(env: &Env, dex_address: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKeyV2::DexAddress, dex_address);
+    bump_instance(env);
+}
+
+/// Get the configured DEX contract address, if set.
+pub fn get_dex_address(env: &Env) -> Option<Address> {
+    env.storage()
+        .instance()
+        .get(&DataKeyV2::DexAddress)
+}
+
+/// Set a specific DEX pool configuration for an asset pair.
+pub fn set_dex_pool(
+    env: &Env,
+    token_in: &Address,
+    token_out: &Address,
+    pool_info: &DexPoolInfo,
+) {
+    env.storage()
+        .instance()
+        .set(&DataKeyV2::DexPool(token_in.clone(), token_out.clone()), pool_info);
+    bump_instance(env);
+}
+
+/// Get the DEX pool configuration for an asset pair.
+pub fn get_dex_pool(
+    env: &Env,
+    token_in: &Address,
+    token_out: &Address,
+) -> Option<DexPoolInfo> {
+    env.storage()
+        .instance()
+        .get(&DataKeyV2::DexPool(token_in.clone(), token_out.clone()))
+}
+
+/// Enable or disable swap streaming globally.
+pub fn set_swap_enabled(env: &Env, enabled: bool) {
+    env.storage()
+        .instance()
+        .set(&DataKeyV2::SwapEnabled, &enabled);
+    bump_instance(env);
+}
+
+/// Check if swap streaming is enabled globally.
+pub fn is_swap_enabled(env: &Env) -> bool {
+    env.storage()
+        .instance()
+        .get(&DataKeyV2::SwapEnabled)
+        .unwrap_or(false) // Default to disabled
 }

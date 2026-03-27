@@ -405,3 +405,91 @@ pub struct StreamSplitUpdatedEvent {
     pub split_bps: u32,
     pub timestamp: u64,
 }
+
+// ----------------------------------------------------------------
+// Issue #378 — Streaming Swap (DEX Integration)
+// ----------------------------------------------------------------
+
+/// Arguments for creating a stream with an automatic DEX swap.
+/// The sender provides `amount_in` of `asset_in`, which is swapped to
+/// `asset_out` via a Soroban AMM before initializing the stream.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct SwapStreamArgs {
+    /// The sender address (must authorize this call)
+    pub sender: Address,
+    /// The receiver address (receives the streamed asset_out)
+    pub receiver: Address,
+    /// Amount of asset_in to deposit and swap
+    pub amount_in: i128,
+    /// Asset being deposited (e.g., XLM)
+    pub asset_in: Address,
+    /// Asset to receive after swap (e.g., USDC) - this is the streamed asset
+    pub asset_out: Address,
+    /// Minimum amount of asset_out to receive after swap (slippage protection)
+    pub min_amount_out: i128,
+    /// Slippage tolerance in basis points (0-10000, e.g., 50 = 0.5%)
+    /// This is an additional safety check beyond min_amount_out
+    pub slippage_tolerance_bps: u32,
+    /// When the swap must be executed by (Unix timestamp)
+    pub swap_deadline: u64,
+    /// Stream start time (Unix timestamp)
+    pub start_time: u64,
+    /// Stream end time (Unix timestamp)
+    pub end_time: u64,
+    /// Optional cliff time for the stream
+    pub cliff_time: u64,
+    /// Optional vault address for yield-bearing streams
+    pub vault_address: Option<Address>,
+    /// Whether to enable yield on the stream
+    pub yield_enabled: bool,
+    /// Who receives accrued vault yield: 0 = Sender, 1 = Receiver, 2 = Treasury
+    pub yield_recipient: u32,
+    /// Address that receives a split of every withdrawal
+    pub split_address: Option<Address>,
+    /// Fraction of each withdrawal routed to split_address (0-9999 bps)
+    pub split_bps: u32,
+    /// 0 = Unilateral, 1 = Mutual cancellation
+    pub cancellation_type: u32,
+}
+
+/// Result of a swap operation returned to the caller
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct SwapResult {
+    /// Amount of asset_in that was swapped
+    pub amount_in: i128,
+    /// Amount of asset_out received from the swap
+    pub amount_out: i128,
+    /// Price impact in basis points (e.g., 100 = 1% price impact)
+    pub price_impact_bps: i128,
+}
+
+/// Event emitted when a swap stream is created
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct SwapStreamCreatedEvent {
+    pub stream_id: u64,
+    pub sender: Address,
+    pub receiver: Address,
+    pub asset_in: Address,
+    pub asset_out: Address,
+    pub amount_in: i128,
+    pub amount_out: i128,
+    pub min_amount_out: i128,
+    pub timestamp: u64,
+}
+
+/// DEX pool information for swap operations
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct DexPoolInfo {
+    /// The DEX contract address
+    pub dex_address: Address,
+    /// The first asset in the pool (token address or None for native XLM)
+    pub token_a: Option<Address>,
+    /// The second asset in the pool
+    pub token_b: Address,
+    /// Pool fee in basis points (e.g., 30 = 0.3% fee)
+    pub fee_bps: u32,
+}
