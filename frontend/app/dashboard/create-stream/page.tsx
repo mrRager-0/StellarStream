@@ -26,6 +26,7 @@ interface FormData {
   splitEnabled: boolean;
   splitAddress: string;
   splitPercent: number; // 0–50
+  splitRecipients: Array<{ address: string; percent: number }>;
   // Privacy Shield (Issue #463)
   privacyShieldEnabled: boolean;
   // Step 2
@@ -46,6 +47,7 @@ const INITIAL_FORM: FormData = {
   splitEnabled: false,
   splitAddress: "",
   splitPercent: 10,
+  splitRecipients: [],
   privacyShieldEnabled: false,
   totalAmount: "",
   rateType: "per-hour",
@@ -284,6 +286,67 @@ function StreamSplitter({
 }) {
   const [focused, setFocused] = useState(false);
   const [proposalError, setProposalError] = useState<string | null>(null);
+  const [splitRecipients, setSplitRecipients] = useState<Array<{ address: string; percent: number }>>(form.splitRecipients || []);
+  const [mergeSuggestionVisible, setMergeSuggestionVisible] = useState(false);
+
+  const normalizedRecipients = splitRecipients.map((item) => ({ address: item.address.toUpperCase(), percent: item.percent }));
+
+  useEffect(() => {
+    setSplitRecipients(form.splitRecipients || []);
+  }, [form.splitRecipients]);
+
+  const duplicates = normalizedRecipients.reduce<Record<string, number[]>>((acc, recipient, index) => {
+    const addr = recipient.address;
+    if (!acc[addr]) acc[addr] = [];
+    acc[addr].push(index);
+    return acc;
+  }, {});
+
+  const duplicateAddresses = Object.keys(duplicates).filter((addr) => duplicates[addr].length > 1);
+
+  useEffect(() => {
+    setMergeSuggestionVisible(duplicateAddresses.length > 0);
+    update({ splitRecipients });
+  }, [splitRecipients, duplicateAddresses.length, update]);
+
+  const addSplitRecipient = () => {
+    if (!isValidStellarAddress(form.splitAddress)) {
+      setProposalError("Address is invalid");
+      return;
+    }
+    const percent = Number(form.splitPercent);
+    if (Number.isNaN(percent) || percent <= 0 || percent > 100) {
+      setProposalError("Split percentage must be 1-100");
+      return;
+    }
+
+    const newRecipient = {
+      address: form.splitAddress.toUpperCase(),
+      percent,
+    };
+    setSplitRecipients((prev) => [...prev, newRecipient]);
+    update({ splitAddress: "", splitPercent: 10, splitEnabled: true });
+  };
+
+  const removeRecipient = (index: number) => {
+    setSplitRecipients((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const mergeDuplicateRows = () => {
+    const mergedMap: Record<string, number> = {};
+    splitRecipients.forEach((recipient) => {
+      const address = recipient.address.toUpperCase();
+      mergedMap[address] = (mergedMap[address] || 0) + recipient.percent;
+    });
+
+    const merged = Object.entries(mergedMap).map(([address, total]) => ({
+      address,
+      percent: Math.min(total, 100),
+    }));
+
+    setSplitRecipients(merged);
+    setMergeSuggestionVisible(false);
+  };
 
   const addressDirty = form.splitAddress.length > 0;
   const addressValid = isValidStellarAddress(form.splitAddress);
@@ -307,11 +370,17 @@ function StreamSplitter({
         return;
       }
 
-      // Enable split and auto-fill primary recipient
+      // Enable split and auto-fill recipient list
+      const normalized = recipients.map((item) => ({
+        address: item.address.toUpperCase(),
+        percent: Math.min(Math.round(item.percentage), 100),
+      }));
+
       update({
         splitEnabled: true,
         splitAddress: primaryRecipient.address,
         splitPercent: Math.min(Math.round(primaryRecipient.percentage), 50), // cap at 50%
+        splitRecipients: normalized,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to load proposal";
@@ -526,6 +595,48 @@ function StreamSplitter({
             )}
             {addressValid && (
               <p className="font-body text-xs text-cyan-400/60">Valid Stellar address ✓</p>
+            )}
+
+            {/* Add recipient to split list */}
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={addSplitRecipient}
+                disabled={!addressValid || form.splitPercent <= 0}
+                className="rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-black hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add Recipient
+              </button>
+              <p className="text-xs text-white/40">Once added, this recipient joins the split list.</p>
+            </div>
+
+            {mergeSuggestionVisible && (
+              <div className="mt-3 rounded-xl border border-yellow-400/40 bg-yellow-400/10 p-3 text-xs text-yellow-200">
+                We detected multiple entries for the same address. <button type="button" onClick={mergeDuplicateRows} className="font-semibold underline">Merge Rows</button>
+              </div>
+            )}
+
+            {splitRecipients.length > 0 && (
+              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <h4 className="text-xs text-white/60 uppercase tracking-wider">Split Recipients</h4>
+                <div className="mt-2 space-y-2">
+                  {splitRecipients.map((recipient, index) => (
+                    <div key={`${recipient.address}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                      <div>
+                        <p className="text-xs text-white">{recipient.address}</p>
+                        <p className="text-[11px] text-white/50">{recipient.percent}%</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeRecipient(index)}
+                        className="text-red-400 text-xs font-medium hover:text-red-300"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>
