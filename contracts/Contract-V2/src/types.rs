@@ -192,6 +192,21 @@ pub struct PermitStreamCreatedEvent {
     pub timestamp: u64,
 }
 
+// ----------------------------------------------------------------
+// Issue #601 — Multi-Asset Batch Disbursement
+// ----------------------------------------------------------------
+
+/// A single recipient entry for `split_multi_asset`.
+/// Each row specifies its own asset, so different recipients can receive
+/// different tokens in a single atomic call.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct MultiAssetRecipient {
+    pub address: Address,
+    pub asset: Address,
+    pub amount: i128,
+}
+
 /// Emitted when the admin is transferred to a new address.
 #[contracttype]
 #[derive(Clone, Debug)]

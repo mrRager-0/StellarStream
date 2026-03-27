@@ -13,10 +13,10 @@ use contracterror::Error;
 pub use types::{
     AdminTransferredEvent, BatchStreamsCreatedEvent, BeneficiaryTransferredV2Event,
     ClawbackRebalanceEvent, ContractPausedEvent, ContractUnpausedEvent, FeesWithdrawnEvent,
-    MigrationEvent, NebulaEvent, Operation, OperationExecutedEvent, OperationScheduledEvent,
-    PermitArgs, PermitStreamCreatedEvent, StreamArgs, StreamBatchEntry, StreamCancelledV2Event,
-    StreamClaimV2Event, StreamCreatedV2Event, StreamMigratedEvent, StreamRefilledEvent,
-    StreamStatus, StreamToppedUpEvent, StreamV2, StreamRequestInitiatedEvent,
+    MigrationEvent, MultiAssetRecipient, NebulaEvent, Operation, OperationExecutedEvent,
+    OperationScheduledEvent, PermitArgs, PermitStreamCreatedEvent, StreamArgs, StreamBatchEntry,
+    StreamCancelledV2Event, StreamClaimV2Event, StreamCreatedV2Event, StreamMigratedEvent,
+    StreamRefilledEvent, StreamStatus, StreamToppedUpEvent, StreamV2, StreamRequestInitiatedEvent,
     StreamRequestApprovedEvent, StreamRequestExecutedEvent,
 };
 use v1_interface::Client as V1Client;
@@ -2602,6 +2602,42 @@ impl Contract {
                 data,
             },
         );
+
+        Ok(())
+    }
+
+    // ----------------------------------------------------------------
+    // Issue #601 — Multi-Asset Batch Disbursement
+    // ----------------------------------------------------------------
+
+    /// Disburse multiple assets to multiple recipients in a single atomic call.
+    ///
+    /// The caller must have pre-approved this contract (via `token.approve`) for
+    /// each distinct asset/amount combination before invoking this function.
+    /// Each `MultiAssetRecipient` row may specify a different asset, so USDC can
+    /// go to some recipients while XLM (or any SAC-compliant token) goes to others.
+    ///
+    /// Panics (via `require_auth`) if the caller has not authorised the transaction.
+    pub fn split_multi_asset(
+        env: Env,
+        from: Address,
+        recipients: Vec<MultiAssetRecipient>,
+    ) -> Result<(), Error> {
+        Self::require_not_paused(&env)?;
+
+        if recipients.is_empty() || recipients.len() > 50 {
+            return Err(Error::BatchTooLarge);
+        }
+
+        from.require_auth();
+
+        for entry in recipients.iter() {
+            if entry.amount <= 0 {
+                return Err(Error::BelowDustThreshold);
+            }
+            let token_client = soroban_sdk::token::TokenClient::new(&env, &entry.asset);
+            token_client.transfer(&from, &entry.address, &entry.amount);
+        }
 
         Ok(())
     }
