@@ -6,6 +6,7 @@ import { BulkDispatchPanel } from "@/components/dashboard/BulkDispatchPanel";
 import { SessionRestorePrompt } from "@/components/dashboard/SessionRestorePrompt";
 import { FileUp, Calculator, Share2, AlertCircle } from "lucide-react";
 import type { Recipient } from "@/lib/bulk-splitter/types";
+import { useSaveContacts } from "@/lib/hooks/use-save-contacts";
 
 export default function SplitterPage() {
   const {
@@ -24,6 +25,8 @@ export default function SplitterPage() {
 
   const [rewardAmount, setRewardAmount] = useState("1000");
   const [showRestorePrompt, setShowRestorePrompt] = useState(false);
+  const [saveToContacts, setSaveToContacts] = useState(false);
+  const saveContacts = useSaveContacts();
 
   // Detect existing session on mount
   useEffect(() => {
@@ -54,6 +57,14 @@ export default function SplitterPage() {
     await new Promise((resolve) => setTimeout(resolve, 1500 + Math.random() * 1000));
     if (Math.random() < 0.1) throw new Error("Network congestion or timeout");
     return "0x" + Math.random().toString(16).slice(2, 10) + "..." + Math.random().toString(16).slice(2, 6);
+  };
+
+  const handleDispatch = async () => {
+    await dispatch(mockSubmitBatch);
+    if (saveToContacts) {
+      const addresses = voters.map((v) => v.address);
+      await saveContacts(addresses);
+    }
   };
 
   return (
@@ -154,10 +165,20 @@ export default function SplitterPage() {
           </div>
         )}
 
+        <label className="flex items-center gap-2 mb-6 cursor-pointer select-none w-fit">
+          <input
+            type="checkbox"
+            checked={saveToContacts}
+            onChange={(e) => setSaveToContacts(e.target.checked)}
+            className="h-4 w-4 rounded border-white/20 bg-black/20 accent-emerald-400"
+          />
+          <span className="text-sm text-white/60">Save new recipients to contacts</span>
+        </label>
+
         {batches.length > 0 && (
           <BulkDispatchPanel
             batchStates={batchStates}
-            onDispatch={dispatch}
+            onDispatch={handleDispatch}
             onRetryFailed={retryFailed}
             submitBatch={mockSubmitBatch}
           />
